@@ -18,13 +18,20 @@ class MovingAverageCrossover(StrategyBase):
         short_ma_now = ma(closes, self.short_window)
         long_ma_now = ma(closes, self.long_window)
 
-        if short_ma_now > long_ma_now:
+        prev_closes = closes[:-1]
+        short_ma_prev = ma(prev_closes, self.short_window)
+        long_ma_prev = ma(prev_closes, self.long_window)
+
+        crossed_above = short_ma_prev <= long_ma_prev and short_ma_now > long_ma_now
+        crossed_below = short_ma_prev >= long_ma_prev and short_ma_now < long_ma_now
+
+        if crossed_above:
             return Signal(
                 action="buy",
                 reason=f"Golden cross: {self.short_window}MA ({short_ma_now:.2f}) crossed above {self.long_window}MA ({long_ma_now:.2f})",
                 confidence=0.7,
             )
-        if short_ma_now < long_ma_now:
+        if crossed_below:
             return Signal(
                 action="sell",
                 reason=f"Death cross: {self.short_window}MA ({short_ma_now:.2f}) crossed below {self.long_window}MA ({long_ma_now:.2f})",
