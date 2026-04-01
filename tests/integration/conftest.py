@@ -49,17 +49,16 @@ async def clean_db(db_session):
 def scrape_symbol(client):
     """Returns an async callable that POSTs /symbols/{symbol}/scrape with retries."""
     async def _scrape(symbol: str, retries: int = 3, delay: float = 2.0):
-        last_exc = None
+        last_error = None
         for attempt in range(retries):
             try:
                 resp = await client.post(f"/symbols/{symbol}/scrape")
                 if resp.status_code == 200:
                     return resp.json()
-                if attempt < retries - 1:
-                    await asyncio.sleep(delay)
+                last_error = f"HTTP {resp.status_code}: {resp.text}"
             except Exception as exc:
-                last_exc = exc
-                if attempt < retries - 1:
-                    await asyncio.sleep(delay)
-        pytest.skip(f"Yahoo Finance unreachable after {retries} attempts: {last_exc}")
+                last_error = str(exc)
+            if attempt < retries - 1:
+                await asyncio.sleep(delay)
+        pytest.skip(f"Yahoo Finance unreachable after {retries} attempts: {last_error}")
     return _scrape
