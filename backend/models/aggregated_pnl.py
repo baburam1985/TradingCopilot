@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from sqlalchemy import String, Numeric, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,8 +12,8 @@ class AggregatedPnl(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
     period_type: Mapped[str] = mapped_column(String(10), nullable=False)
-    period_start: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    period_end: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     total_pnl: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False)
     num_trades: Mapped[int] = mapped_column(Integer, nullable=False)
     num_wins: Mapped[int] = mapped_column(Integer, nullable=False)

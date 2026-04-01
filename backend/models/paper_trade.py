@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Numeric, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
@@ -14,8 +16,8 @@ class PaperTrade(Base):
     signal_reason: Mapped[str] = mapped_column(String(255), nullable=False)
     price_at_signal: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False)
     quantity: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
-    timestamp_open: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    timestamp_close: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    timestamp_open: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    timestamp_close: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     price_at_close: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
     pnl: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="open")

@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Numeric
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,5 +17,5 @@ class TradingSession(Base):
     starting_capital: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     mode: Mapped[str] = mapped_column(String(10), nullable=False)  # "paper" or "live"
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="active")
-    created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    closed_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
