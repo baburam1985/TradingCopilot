@@ -50,3 +50,20 @@ async def test_list_sessions_returns_empty_list():
         resp = await client.get("/sessions")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_scrape_endpoint_returns_422_when_yahoo_fails(monkeypatch):
+    """When yahoo scraper returns success=False, endpoint returns 422."""
+    import scrapers.yahoo as yahoo_mod
+    from scrapers.base import FetchResult
+
+    async def fake_fetch(symbol):
+        return FetchResult(source="yahoo", open=0, high=0, low=0, close=0,
+                           volume=0, success=False, error="No data")
+
+    monkeypatch.setattr(yahoo_mod, "fetch_yahoo", fake_fetch)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/symbols/FAKE/scrape")
+    assert resp.status_code == 422
