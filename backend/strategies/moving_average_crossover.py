@@ -3,6 +3,10 @@ from strategies.base import StrategyBase, Signal
 class MovingAverageCrossover(StrategyBase):
     name = "moving_average_crossover"
     description = "Buy on golden cross (short MA crosses above long MA), sell on death cross."
+    parameters = {
+        "short_window": {"type": "int", "default": 50, "description": "Short moving average window"},
+        "long_window": {"type": "int", "default": 200, "description": "Long moving average window"},
+    }
 
     def __init__(self, short_window: int = 50, long_window: int = 200):
         self.short_window = short_window
