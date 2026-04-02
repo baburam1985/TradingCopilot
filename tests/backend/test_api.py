@@ -39,8 +39,9 @@ async def test_list_strategies_returns_moving_average():
         resp = await client.get("/strategies")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "moving_average_crossover"
+    names = [s["name"] for s in data]
+    assert "moving_average_crossover" in names
+    assert "rsi" in names
 
 
 @pytest.mark.asyncio
