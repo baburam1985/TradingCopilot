@@ -53,6 +53,32 @@ The end goal: make money for the user by faithfully following the methodology th
 
 ---
 
+## Testing Requirements — Definition of Done
+
+Every task or feature is **not done** until both test suites pass. This applies to all agents, subagents, and human contributors.
+
+### 1. Unit Tests (always required)
+```bash
+python -m pytest tests/backend/ -v
+```
+Must pass with zero failures before any commit is considered complete.
+
+### 2. Integration Tests (required before declaring done)
+```bash
+./scripts/run-integration-tests.sh
+```
+Requires Docker Desktop to be running. The script:
+- Builds the full Docker Compose stack
+- Runs DB migrations
+- Executes `tests/integration/` against the live stack
+- Tears down the stack regardless of outcome
+
+**Both suites must be green before a task is marked complete, a PR is opened, or a branch is merged.**
+
+If Docker is not available in the current environment, explicitly state: *"Integration tests not run — Docker unavailable."* and flag it for the human to verify before merging.
+
+---
+
 ## Out of Scope (for now)
 - Multi-asset portfolios (single stock per session initially)
 - Options, futures, or crypto (equities only initially)
