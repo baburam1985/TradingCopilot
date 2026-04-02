@@ -1,8 +1,13 @@
+import sys
+import os
 import uuid
 import pytest
 import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import text
+
+# Ensure backend is importable (models live there)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 
 pytestmark = pytest.mark.integration
 
@@ -22,10 +27,13 @@ async def _seed_price_history(db_session, symbol: str, days: int = 90):
     if hasattr(df.columns, "levels"):
         df.columns = df.columns.get_level_values(0)
 
+    from models.price_history import PriceHistory
+
     rows = []
+    orm_objects = []
     for ts, row in df.iterrows():
-        rows.append({
-            "id": str(uuid.uuid4()),
+        r = {
+            "id": uuid.uuid4(),
             "symbol": symbol,
             "timestamp": ts.to_pydatetime().replace(tzinfo=timezone.utc),
             "open": float(row["Open"]),
@@ -36,24 +44,16 @@ async def _seed_price_history(db_session, symbol: str, days: int = 90):
             "yahoo_close": float(row["Close"]),
             "alphavantage_close": None,
             "finnhub_close": None,
-            "outlier_flags": "{}",
-            "sources_available": "{yahoo}",
-        })
+            "outlier_flags": {},
+            "sources_available": ["yahoo"],
+        }
+        rows.append(r)
+        orm_objects.append(PriceHistory(**r))
 
     if not rows:
         pytest.skip("No rows to insert after parsing Yahoo Finance data")
 
-    await db_session.execute(
-        text("""
-            INSERT INTO price_history
-              (id, symbol, timestamp, open, high, low, close, volume,
-               yahoo_close, alphavantage_close, finnhub_close, outlier_flags, sources_available)
-            VALUES
-              (:id, :symbol, :timestamp, :open, :high, :low, :close, :volume,
-               :yahoo_close, :alphavantage_close, :finnhub_close, :outlier_flags::jsonb, :sources_available::text[])
-        """),
-        rows,
-    )
+    db_session.add_all(orm_objects)
     await db_session.commit()
     return rows
 

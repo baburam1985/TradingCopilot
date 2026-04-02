@@ -39,6 +39,8 @@ async def db_session():
 @pytest.fixture
 async def clean_db(db_session):
     yield
+    # Rollback any aborted transaction before truncating
+    await db_session.rollback()
     await db_session.execute(
         text("TRUNCATE TABLE paper_trades, aggregated_pnl, sessions, price_history RESTART IDENTITY CASCADE")
     )
