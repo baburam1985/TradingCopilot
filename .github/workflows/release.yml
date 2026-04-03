@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version tag
+        id: version
+        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          tags: tradingcopilot-backend:${{ steps.version.outputs.TAG }}
+          outputs: type=docker,dest=/tmp/backend-image.tar
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package release artifact
+        run: |
+          mkdir -p release-artifact
+          cp docker-compose.yml release-artifact/
+          cp .env.example release-artifact/
+          cp -r frontend/dist release-artifact/frontend-dist
+          cp /tmp/backend-image.tar release-artifact/
+          tar -czf tradingcopilot-${{ steps.version.outputs.TAG }}.tar.gz release-artifact/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tradingcopilot-${{ steps.version.outputs.TAG }}.tar.gz
+          generate_release_notes: true
