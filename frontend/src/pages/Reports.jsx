@@ -408,14 +408,16 @@ export default function Reports() {
           title="Backtest Results"
           subtitle="Historical simulation output"
         />
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <MetricCard label="Total Sessions" value={totalSessions} />
-          <MetricCard
-            label="Total P&L"
-            value={totalPnl}
-            valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined}
-          />
-          <MetricCard label="Avg Win Rate" value={avgWinRate} valueColor="green" />
+        <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">
+          <div className="grid grid-cols-3 gap-4 min-w-[360px] sm:min-w-0">
+            <MetricCard label="Total Sessions" value={totalSessions} />
+            <MetricCard
+              label="Total P&L"
+              value={totalPnl}
+              valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined}
+            />
+            <MetricCard label="Avg Win Rate" value={avgWinRate} valueColor="green" />
+          </div>
         </div>
         <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
           <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">
@@ -470,21 +472,23 @@ export default function Reports() {
       {/* Tab: Session Report (existing content, unchanged) */}
       {activeTab === "SESSION REPORT" && (
         <>
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <MetricCard
-              label="Total Sessions"
-              value={totalSessions > 0 ? totalSessions : "—"}
-            />
-            <MetricCard
-              label="Total P&L"
-              value={totalPnl}
-              valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined}
-            />
-            <MetricCard
-              label="Avg Win Rate"
-              value={avgWinRate}
-              valueColor={avgWinRate !== "—" ? "green" : undefined}
-            />
+          <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">
+            <div className="grid grid-cols-3 gap-4 min-w-[360px] sm:min-w-0">
+              <MetricCard
+                label="Total Sessions"
+                value={totalSessions > 0 ? totalSessions : "—"}
+              />
+              <MetricCard
+                label="Total P&L"
+                value={totalPnl}
+                valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined}
+              />
+              <MetricCard
+                label="Avg Win Rate"
+                value={avgWinRate}
+                valueColor={avgWinRate !== "—" ? "green" : undefined}
+              />
+            </div>
           </div>
 
           {/* Session history list */}
@@ -547,7 +551,8 @@ export default function Reports() {
                 <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">
                   Advanced Metrics
                 </h2>
-                <div className="grid grid-cols-5 gap-4">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="grid grid-cols-5 gap-4 min-w-[540px] sm:min-w-0">
                   <MetricCard label="Sharpe Ratio" value={sharpeDisplay} />
                   <MetricCard label="Sortino Ratio" value={sortinoDisplay} />
                   <MetricCard
@@ -567,6 +572,7 @@ export default function Reports() {
                         : undefined
                     }
                   />
+                </div>
                 </div>
               </div>
               <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
