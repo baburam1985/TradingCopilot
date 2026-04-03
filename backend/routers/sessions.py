@@ -22,6 +22,9 @@ class CreateSessionRequest(BaseModel):
     take_profit_pct: Optional[float] = None
     max_position_pct: Optional[float] = None
     daily_max_loss_pct: Optional[float] = None
+    # Notification preferences
+    notify_email: bool = False
+    email_address: Optional[str] = None
 
 @router.post("")
 async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(get_db)):
@@ -37,6 +40,8 @@ async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(g
         take_profit_pct=req.take_profit_pct,
         max_position_pct=req.max_position_pct,
         daily_max_loss_pct=req.daily_max_loss_pct,
+        notify_email=req.notify_email,
+        email_address=req.email_address,
     )
     db.add(session)
     await db.commit()

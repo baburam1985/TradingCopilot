@@ -1,5 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
+import Toast from "./Toast";
+import NotificationHistory from "./NotificationHistory";
+import { useNotifications } from "../context/NotificationContext";
 
 const NAV_ITEMS = [
   { label: "New Session", to: "/" },
@@ -11,6 +14,9 @@ const NAV_ITEMS = [
 export default function AppShell({ children }) {
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const { notifications } = useNotifications();
+  const unreadCount = notifications.length;
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a] text-white">
@@ -93,7 +99,18 @@ export default function AppShell({ children }) {
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden sm:inline bg-[#00e676] text-black text-xs font-bold px-2 py-0.5 rounded">LIVE STATUS</span>
-            <span className="text-[#888] text-sm cursor-pointer hover:text-white">🔔</span>
+            <button
+              onClick={() => setHistoryOpen((o) => !o)}
+              className="relative text-[#888] hover:text-white text-sm"
+              aria-label="Notifications"
+            >
+              🔔
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#ff4444] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
             <span className="hidden sm:inline text-[#888] text-sm cursor-pointer hover:text-white">⚙</span>
             <div className="w-7 h-7 rounded-full bg-[#1e1e1e] flex items-center justify-center text-xs text-[#888]">U</div>
           </div>
@@ -104,6 +121,9 @@ export default function AppShell({ children }) {
           {children}
         </main>
       </div>
+
+      <Toast />
+      <NotificationHistory open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 }

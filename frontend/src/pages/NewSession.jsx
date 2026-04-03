@@ -32,6 +32,8 @@ export default function NewSession() {
     take_profit_pct: "",
     max_position_pct: "",
     daily_max_loss_pct: "",
+    notify_email: false,
+    email_address: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,6 +122,8 @@ export default function NewSession() {
           take_profit_pct: form.take_profit_pct !== "" ? +form.take_profit_pct : null,
           max_position_pct: form.max_position_pct !== "" ? +form.max_position_pct : null,
           daily_max_loss_pct: form.daily_max_loss_pct !== "" ? +form.daily_max_loss_pct : null,
+          notify_email: form.notify_email,
+          email_address: form.notify_email && form.email_address !== "" ? form.email_address : null,
         });
         navigate(`/dashboard/${session.data.id}`);
       }
@@ -292,6 +296,37 @@ export default function NewSession() {
                 </div>
               </div>
             </div>
+
+            {/* Notifications */}
+            {form.mode !== "backtest" && (
+              <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+                <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Notifications</h2>
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <div
+                      onClick={() => setForm({ ...form, notify_email: !form.notify_email })}
+                      className={`w-9 h-5 rounded-full transition-colors ${form.notify_email ? "bg-[#00e676]" : "bg-[#333]"} relative flex-shrink-0`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.notify_email ? "left-4" : "left-0.5"}`} />
+                    </div>
+                    <span className="text-[#888] text-xs">Email alerts on trade open/close</span>
+                  </label>
+                  {form.notify_email && (
+                    <div>
+                      <label className={labelClass}>Email Address</label>
+                      <input
+                        type="email"
+                        className={inputClass}
+                        value={form.email_address}
+                        onChange={e => setForm({ ...form, email_address: e.target.value })}
+                        placeholder="you@example.com"
+                        required={form.notify_email}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Execution Logic (backtest date range) */}
             {form.mode === "backtest" && (

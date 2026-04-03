@@ -6,6 +6,7 @@ import PriceChart from "../components/PriceChart";
 import TradeLog from "../components/TradeLog";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
+import { useNotifications } from "../context/NotificationContext";
 
 export default function LiveDashboard() {
   const { sessionId } = useParams();
@@ -13,6 +14,7 @@ export default function LiveDashboard() {
   const [trades, setTrades] = useState([]);
   const [latestPrice, setLatestPrice] = useState(null);
   const wsRef = useRef(null);
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     getTrades(sessionId).then(r => setTrades(r.data));
@@ -22,6 +24,8 @@ export default function LiveDashboard() {
         setLatestPrice(msg.close);
         setBars(prev => [...prev.slice(-199), { timestamp: msg.timestamp, close: msg.close }]);
         getTrades(sessionId).then(r => setTrades(r.data));
+      } else if (msg.type === "notification") {
+        addNotification(msg);
       }
     });
 
@@ -48,8 +52,9 @@ export default function LiveDashboard() {
         subtitle={sessionId ? `Session ${sessionId}` : "Monitoring active session"}
       />
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* Metrics row — horizontal scroll on mobile */}
+      <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">
+      <div className="grid grid-cols-4 gap-4 min-w-[480px] sm:min-w-0">
         <MetricCard
           label="Current Price"
           value={latestPrice ? `$${latestPrice.toFixed(2)}` : "—"}
@@ -62,6 +67,7 @@ export default function LiveDashboard() {
         />
         <MetricCard label="Total Trades" value={totalTrades > 0 ? totalTrades : "—"} />
         <MetricCard label="Win Rate" value={winRate} valueColor={winRate !== "—" ? "green" : undefined} />
+      </div>
       </div>
 
       {/* Charts */}

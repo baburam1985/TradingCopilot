@@ -5,12 +5,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from database import AsyncSessionLocal
 from models.price_history import PriceHistory
+from notifications.broadcaster import notification_broadcaster
 
 router = APIRouter()
 
 @router.websocket("/ws/sessions/{session_id}")
 async def websocket_session(websocket: WebSocket, session_id: uuid.UUID):
     await websocket.accept()
+    notification_broadcaster.register(session_id, websocket)
     last_timestamp = None
     try:
         while True:
@@ -39,3 +41,5 @@ async def websocket_session(websocket: WebSocket, session_id: uuid.UUID):
             await asyncio.sleep(10)
     except WebSocketDisconnect:
         pass
+    finally:
+        notification_broadcaster.unregister(session_id)

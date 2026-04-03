@@ -4,9 +4,11 @@ import NewSession from "./pages/NewSession";
 import LiveDashboard from "./pages/LiveDashboard";
 import Reports from "./pages/Reports";
 import Optimize from "./pages/Optimize";
+import { NotificationProvider } from "./context/NotificationContext";
 
 export default function App() {
   return (
+    <NotificationProvider>
     <BrowserRouter>
       <AppShell>
         <Routes>
@@ -17,5 +19,6 @@ export default function App() {
         </Routes>
       </AppShell>
     </BrowserRouter>
+    </NotificationProvider>
   );
 }
