@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: "Reports", to: "/reports" },
   { label: "Optimize", to: "/optimize" },
   { label: "Alerts", to: "/alerts" },
+  { label: "Watchlist", to: "/watchlist" },
 ];
 
 export default function AppShell({ children }) {

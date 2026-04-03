@@ -5,6 +5,7 @@ import LiveDashboard from "./pages/LiveDashboard";
 import Reports from "./pages/Reports";
 import Optimize from "./pages/Optimize";
 import AlertPreferences from "./pages/AlertPreferences";
+import Watchlist from "./pages/Watchlist";
 import { NotificationProvider } from "./context/NotificationContext";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/optimize" element={<Optimize />} />
           <Route path="/alerts" element={<AlertPreferences />} />
+          <Route path="/watchlist" element={<Watchlist />} />
         </Routes>
       </AppShell>
     </BrowserRouter>
