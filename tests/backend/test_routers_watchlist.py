@@ -1,7 +1,7 @@
 """Tests for the watchlist router (/watchlist).
 
-Uses a minimal FastAPI app (not main.app) since the watchlist router
-is not yet registered in main.py.
+Uses a minimal FastAPI app (not main.app) to isolate the watchlist router,
+which is registered in main.py under the /watchlist prefix.
 """
 
 import sys
@@ -122,7 +122,7 @@ class TestWatchlistRouter:
         db = _make_mock_db()
         item = _mock_item("AAPL")
         db.get = AsyncMock(return_value=item)
-        db.delete = MagicMock()
+        db.delete = AsyncMock()
 
         with patch("routers.watchlist.unregister_watchlist_symbol"):
             client = _make_mini_app(db)

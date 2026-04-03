@@ -94,7 +94,7 @@ def test_delete_watchlist_item_calls_unregister(watchlist_app, item_id):
     mock_db = AsyncMock()
     mock_item = make_item(item_id)
     mock_db.get = AsyncMock(return_value=mock_item)
-    mock_db.delete = MagicMock()
+    mock_db.delete = AsyncMock()
     mock_db.commit = AsyncMock()
 
     async def fake_get_db():
@@ -324,3 +324,157 @@ async def test_trigger_watchlist_signals_no_broadcast_on_hold():
         await job._trigger_watchlist_signals("MSFT", 300.0)
 
     mock_broadcaster.broadcast_watchlist.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_trigger_watchlist_signals_broadcasts_on_sell():
+    import scheduler.scraper_job as job
+
+    mock_signal = MagicMock()
+    mock_signal.action = "sell"
+    mock_signal.reason = "RSI overbought"
+
+    mock_strategy = MagicMock()
+    mock_strategy.return_value.analyze.return_value = mock_signal
+
+    mock_item = MagicMock()
+    mock_item.id = uuid.uuid4()
+    mock_item.symbol = "AAPL"
+    mock_item.strategy = "rsi"
+    mock_item.strategy_params = {}
+    mock_item.alert_threshold = None
+    mock_item.last_price = None
+    mock_item.notify_email = False
+    mock_item.email_address = None
+
+    mock_bar = MagicMock()
+    mock_bar.close = 190.0
+
+    with patch("scheduler.scraper_job.AsyncSessionLocal") as mock_session_cls, \
+         patch("scheduler.scraper_job.STRATEGY_REGISTRY", {"rsi": mock_strategy}), \
+         patch("scheduler.scraper_job.notification_broadcaster") as mock_broadcaster:
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_ctx
+
+        mock_result_items = MagicMock()
+        mock_result_items.scalars.return_value.all.return_value = [mock_item]
+        mock_result_bars = MagicMock()
+        mock_result_bars.scalars.return_value.all.return_value = [mock_bar]
+        mock_ctx.execute = AsyncMock(side_effect=[mock_result_items, mock_result_bars])
+        mock_ctx.get = AsyncMock(return_value=mock_item)
+        mock_ctx.commit = AsyncMock()
+
+        mock_broadcaster.broadcast_watchlist = AsyncMock()
+
+        await job._trigger_watchlist_signals("AAPL", 190.0)
+
+    mock_broadcaster.broadcast_watchlist.assert_called_once()
+    call_payload = mock_broadcaster.broadcast_watchlist.call_args[0][0]
+    assert call_payload["level"] == "info"
+    assert "SELL" in call_payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_trigger_watchlist_signals_broadcasts_threshold_crossing():
+    import scheduler.scraper_job as job
+
+    mock_signal = MagicMock()
+    mock_signal.action = "hold"
+    mock_signal.reason = "neutral"
+
+    mock_strategy = MagicMock()
+    mock_strategy.return_value.analyze.return_value = mock_signal
+
+    mock_item = MagicMock()
+    mock_item.id = uuid.uuid4()
+    mock_item.symbol = "AAPL"
+    mock_item.strategy = "rsi"
+    mock_item.strategy_params = {}
+    mock_item.alert_threshold = 185.0   # threshold to cross
+    mock_item.last_price = 182.0        # price was below threshold
+    mock_item.notify_email = False
+    mock_item.email_address = None
+
+    mock_bar = MagicMock()
+    mock_bar.close = 186.0  # price crossed above threshold
+
+    with patch("scheduler.scraper_job.AsyncSessionLocal") as mock_session_cls, \
+         patch("scheduler.scraper_job.STRATEGY_REGISTRY", {"rsi": mock_strategy}), \
+         patch("scheduler.scraper_job.notification_broadcaster") as mock_broadcaster:
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_ctx
+
+        mock_result_items = MagicMock()
+        mock_result_items.scalars.return_value.all.return_value = [mock_item]
+        mock_result_bars = MagicMock()
+        mock_result_bars.scalars.return_value.all.return_value = [mock_bar]
+        mock_ctx.execute = AsyncMock(side_effect=[mock_result_items, mock_result_bars])
+        mock_ctx.get = AsyncMock(return_value=mock_item)
+        mock_ctx.commit = AsyncMock()
+
+        mock_broadcaster.broadcast_watchlist = AsyncMock()
+
+        await job._trigger_watchlist_signals("AAPL", 186.0)
+
+    mock_broadcaster.broadcast_watchlist.assert_called_once()
+    call_payload = mock_broadcaster.broadcast_watchlist.call_args[0][0]
+    assert call_payload["level"] == "warning"
+    assert "185.00" in call_payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_trigger_watchlist_signals_sends_email_on_buy():
+    import scheduler.scraper_job as job
+
+    mock_signal = MagicMock()
+    mock_signal.action = "buy"
+    mock_signal.reason = "RSI oversold"
+
+    mock_strategy = MagicMock()
+    mock_strategy.return_value.analyze.return_value = mock_signal
+
+    mock_item = MagicMock()
+    mock_item.id = uuid.uuid4()
+    mock_item.symbol = "AAPL"
+    mock_item.strategy = "rsi"
+    mock_item.strategy_params = {}
+    mock_item.alert_threshold = None
+    mock_item.last_price = None
+    mock_item.notify_email = True
+    mock_item.email_address = "trader@test.com"
+
+    mock_bar = MagicMock()
+    mock_bar.close = 182.0
+
+    with patch("scheduler.scraper_job.AsyncSessionLocal") as mock_session_cls, \
+         patch("scheduler.scraper_job.STRATEGY_REGISTRY", {"rsi": mock_strategy}), \
+         patch("scheduler.scraper_job.notification_broadcaster") as mock_broadcaster, \
+         patch("notifications.email.send_trade_email") as mock_email:
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_ctx
+
+        mock_result_items = MagicMock()
+        mock_result_items.scalars.return_value.all.return_value = [mock_item]
+        mock_result_bars = MagicMock()
+        mock_result_bars.scalars.return_value.all.return_value = [mock_bar]
+        mock_ctx.execute = AsyncMock(side_effect=[mock_result_items, mock_result_bars])
+        mock_ctx.get = AsyncMock(return_value=mock_item)
+        mock_ctx.commit = AsyncMock()
+
+        mock_broadcaster.broadcast_watchlist = AsyncMock()
+
+        await job._trigger_watchlist_signals("AAPL", 182.0)
+
+    mock_email.assert_called_once()
+    call_args = mock_email.call_args
+    assert call_args[0][0] == "trader@test.com"
+    assert "AAPL" in call_args[0][1]

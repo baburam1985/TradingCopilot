@@ -97,7 +97,7 @@ async def delete_watchlist_item(item_id: uuid.UUID, db: AsyncSession = Depends(g
     if not item:
         raise HTTPException(status_code=404, detail="Watchlist item not found")
     symbol = item.symbol
-    db.delete(item)
+    await db.delete(item)
     await db.commit()
     unregister_watchlist_symbol(symbol)
     return {"deleted": True, "symbol": symbol}
