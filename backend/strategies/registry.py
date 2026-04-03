@@ -5,6 +5,10 @@ from strategies.bollinger_bands import BollingerBandsStrategy
 from strategies.vwap import VWAPStrategy
 from strategies.breakout import BreakoutStrategy
 from strategies.mean_reversion import MeanReversionStrategy
+from strategies.turtle import TurtleStrategy
+from strategies.stochastic import StochasticStrategy
+from strategies.parabolic_sar import ParabolicSARStrategy
+from strategies.adx import ADXStrategy
 
 STRATEGY_REGISTRY: dict[str, type] = {
     "moving_average_crossover": MovingAverageCrossover,
@@ -14,4 +18,8 @@ STRATEGY_REGISTRY: dict[str, type] = {
     "vwap": VWAPStrategy,
     "breakout": BreakoutStrategy,
     "mean_reversion": MeanReversionStrategy,
+    "turtle": TurtleStrategy,
+    "stochastic": StochasticStrategy,
+    "parabolic_sar": ParabolicSARStrategy,
+    "adx": ADXStrategy,
 }
