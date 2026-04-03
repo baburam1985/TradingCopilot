@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, Boolean
+from sqlalchemy import String, Numeric, Boolean, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -29,3 +29,8 @@ class TradingSession(Base):
     # Notification preferences
     notify_email: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False)
     email_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Schedule linkage (null = manually started)
+    schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    auto_started: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False)
+    max_trades: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)

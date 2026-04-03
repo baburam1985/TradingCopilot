@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getStrategies, createSession, runBacktest, runBacktestCompare } from "../api/client";
+import { getStrategies, createSession, createSchedule, runBacktest, runBacktestCompare } from "../api/client";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
+import SchedulePicker from "../components/SchedulePicker";
 
 function buildDefaultParams(parameters) {
   return Object.fromEntries(
@@ -39,6 +40,14 @@ export default function NewSession() {
   const [error, setError] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
   const [compareStrategies, setCompareStrategies] = useState([]);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    days_of_week: [0, 1, 2, 3, 4],
+    start_time_et: "09:30",
+    stop_time_et: "",
+    auto_stop_daily_loss_pct: null,
+    auto_stop_max_trades: null,
+  });
 
   useEffect(() => {
     getStrategies().then((r) => {
@@ -111,6 +120,23 @@ export default function NewSession() {
           to_dt: form.to_dt,
         });
         navigate("/reports", { state: { backtestResult: result.data } });
+      } else if (scheduleEnabled) {
+        await createSchedule({
+          symbol: form.symbol,
+          strategy: form.strategy,
+          strategy_params,
+          capital: +form.starting_capital,
+          mode: form.mode,
+          days_of_week: scheduleForm.days_of_week,
+          start_time_et: scheduleForm.start_time_et,
+          stop_time_et: scheduleForm.stop_time_et || null,
+          stop_loss_pct: form.stop_loss_pct !== "" ? +form.stop_loss_pct : null,
+          take_profit_pct: form.take_profit_pct !== "" ? +form.take_profit_pct : null,
+          max_position_pct: form.max_position_pct !== "" ? +form.max_position_pct : null,
+          auto_stop_daily_loss_pct: scheduleForm.auto_stop_daily_loss_pct,
+          auto_stop_max_trades: scheduleForm.auto_stop_max_trades,
+        });
+        navigate("/schedules");
       } else {
         const session = await createSession({
           symbol: form.symbol,
@@ -328,6 +354,27 @@ export default function NewSession() {
               </div>
             )}
 
+            {/* Auto-Schedule (live modes only) */}
+            {form.mode !== "backtest" && (
+              <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[#00e676] text-xs uppercase tracking-widest">Auto-Schedule</h2>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <div
+                      onClick={() => setScheduleEnabled(!scheduleEnabled)}
+                      className={`w-9 h-5 rounded-full transition-colors ${scheduleEnabled ? "bg-[#00e676]" : "bg-[#333]"} relative`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${scheduleEnabled ? "left-4" : "left-0.5"}`} />
+                    </div>
+                    <span className="text-[#555] text-xs">{scheduleEnabled ? "On" : "Off"}</span>
+                  </label>
+                </div>
+                {scheduleEnabled && (
+                  <SchedulePicker value={scheduleForm} onChange={setScheduleForm} />
+                )}
+              </div>
+            )}
+
             {/* Execution Logic (backtest date range) */}
             {form.mode === "backtest" && (
               <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
@@ -412,6 +459,8 @@ export default function NewSession() {
                 ? "Run Comparison"
                 : form.mode === "backtest"
                 ? "Run Backtest"
+                : scheduleEnabled
+                ? "Save Schedule"
                 : "Start Session"}
             </button>
           </form>

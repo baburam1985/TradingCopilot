@@ -371,7 +371,9 @@ async def _trigger_watchlist_signals(symbol: str, current_price: float):
 
 
 def start_scheduler():
+    from scheduler.schedule_job import _schedule_poller
     scheduler.add_job(_scrape_all, "interval", minutes=1, id="scrape_all")
+    scheduler.add_job(_schedule_poller, "interval", minutes=1, id="schedule_poller")
     scheduler.start()
 
 def stop_scheduler():
