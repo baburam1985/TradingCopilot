@@ -124,3 +124,60 @@ def test_delete_watchlist_item_404_when_not_found(watchlist_app, item_id):
         client = TestClient(watchlist_app)
         resp = client.delete(f"/watchlist/{item_id}")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Broadcaster watchlist tests
+# ---------------------------------------------------------------------------
+
+
+def test_broadcaster_register_watchlist():
+    from notifications.broadcaster import NotificationBroadcaster
+    b = NotificationBroadcaster()
+    ws = MagicMock()
+    b.register_watchlist(ws)
+    assert ws in b._watchlist_connections
+
+
+def test_broadcaster_unregister_watchlist():
+    from notifications.broadcaster import NotificationBroadcaster
+    b = NotificationBroadcaster()
+    ws = MagicMock()
+    b.register_watchlist(ws)
+    b.unregister_watchlist(ws)
+    assert ws not in b._watchlist_connections
+
+
+def test_broadcaster_unregister_watchlist_tolerates_missing():
+    from notifications.broadcaster import NotificationBroadcaster
+    b = NotificationBroadcaster()
+    ws = MagicMock()
+    b.unregister_watchlist(ws)  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_broadcaster_broadcast_watchlist_sends_to_all():
+    from notifications.broadcaster import NotificationBroadcaster
+    b = NotificationBroadcaster()
+    ws1 = AsyncMock()
+    ws2 = AsyncMock()
+    b.register_watchlist(ws1)
+    b.register_watchlist(ws2)
+    payload = {"type": "notification", "level": "info", "title": "T", "message": "M"}
+    await b.broadcast_watchlist(payload)
+    ws1.send_text.assert_called_once()
+    ws2.send_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_broadcaster_broadcast_watchlist_removes_dead_connections():
+    from notifications.broadcaster import NotificationBroadcaster
+    b = NotificationBroadcaster()
+    ws_ok = AsyncMock()
+    ws_dead = AsyncMock()
+    ws_dead.send_text.side_effect = Exception("connection closed")
+    b.register_watchlist(ws_ok)
+    b.register_watchlist(ws_dead)
+    await b.broadcast_watchlist({"type": "notification"})
+    assert ws_dead not in b._watchlist_connections
+    assert ws_ok in b._watchlist_connections

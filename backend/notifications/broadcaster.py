@@ -20,6 +20,7 @@ class NotificationBroadcaster:
 
     def __init__(self):
         self._connections: dict[uuid.UUID, WebSocket] = {}
+        self._watchlist_connections: list[WebSocket] = []
 
     def register(self, session_id: uuid.UUID, ws: WebSocket) -> None:
         self._connections[session_id] = ws
@@ -36,6 +37,29 @@ class NotificationBroadcaster:
         except Exception:
             # Connection dropped — clean up silently
             self.unregister(session_id)
+
+    # ------------------------------------------------------------------
+    # Watchlist channel — all clients share a single broadcast list
+    # ------------------------------------------------------------------
+
+    def register_watchlist(self, ws: WebSocket) -> None:
+        self._watchlist_connections.append(ws)
+
+    def unregister_watchlist(self, ws: WebSocket) -> None:
+        try:
+            self._watchlist_connections.remove(ws)
+        except ValueError:
+            pass
+
+    async def broadcast_watchlist(self, payload: dict) -> None:
+        dead: list[WebSocket] = []
+        for ws in list(self._watchlist_connections):
+            try:
+                await ws.send_text(json.dumps(payload))
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.unregister_watchlist(ws)
 
 
 # Module-level singleton shared across routers and scheduler
