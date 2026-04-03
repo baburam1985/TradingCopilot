@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getStrategies, runOptimize } from "../api/client";
 import PageHeader from "../components/PageHeader";
+import OptimizeHeatmap from "../components/OptimizeHeatmap";
 
 const MAX_COMBINATIONS = 100;
 
@@ -238,6 +239,15 @@ export default function Optimize() {
       )}
 
       {/* Results */}
+      {result && !loading && (
+        <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+          <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">
+            Heatmap
+          </h2>
+          <OptimizeHeatmap results={result.results} metric="sharpe" />
+        </div>
+      )}
+
       {result && !loading && (
         <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
           <div className="flex items-center justify-between mb-4">
