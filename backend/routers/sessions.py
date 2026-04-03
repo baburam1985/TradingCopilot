@@ -13,6 +13,7 @@ from models.paper_trade import PaperTrade
 from models.trade_note import TradeNote
 from scheduler.scraper_job import register_symbol, unregister_symbol
 from journal import build_journal_csv
+from pnl.aggregator import compute_period_summary
 
 router = APIRouter()
 
@@ -36,6 +37,29 @@ class UpdateSessionRequest(BaseModel):
     notify_email: Optional[bool] = None
     email_address: Optional[str] = None
 
+def _resolve_mode(mode: str, broker: str | None) -> str:
+    """Map (mode, broker) → the internal mode string stored on TradingSession.
+
+    Examples:
+      ("paper", None)      → "paper"
+      ("paper", "alpaca")  → "alpaca_paper"
+      ("live", "alpaca")   → "alpaca_live"
+      ("live", "ibkr")     → "ibkr_live"
+    """
+    if mode == "paper":
+        if broker == "alpaca":
+            return "alpaca_paper"
+        return "paper"
+    if mode == "live":
+        if broker == "alpaca":
+            return "alpaca_live"
+        if broker == "ibkr":
+            return "ibkr_live"
+        raise HTTPException(status_code=400, detail="live mode requires a broker (alpaca or ibkr)")
+    # Pass through any already-resolved internal mode value (e.g. "alpaca_live")
+    return mode
+
+
 @router.post("")
 async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(get_db)):
     session = TradingSession(
@@ -43,7 +67,7 @@ async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(g
         strategy=req.strategy,
         strategy_params=req.strategy_params,
         starting_capital=req.starting_capital,
-        mode=req.mode,
+        mode=_resolve_mode(req.mode, req.broker),
         status="active",
         created_at=datetime.now(timezone.utc),
         stop_loss_pct=req.stop_loss_pct,
@@ -60,8 +84,26 @@ async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(g
     return session
 
 @router.get("")
-async def list_sessions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(TradingSession).order_by(TradingSession.created_at.desc()))
+async def list_sessions(
+    strategy: Optional[str] = Query(None),
+    symbol: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(TradingSession).order_by(TradingSession.created_at.desc())
+    if strategy:
+        q = q.where(TradingSession.strategy == strategy)
+    if symbol:
+        q = q.where(TradingSession.symbol == symbol.upper())
+    if from_date:
+        q = q.where(TradingSession.created_at >= datetime.fromisoformat(from_date))
+    if to_date:
+        q = q.where(TradingSession.created_at <= datetime.fromisoformat(to_date))
+    if status:
+        q = q.where(TradingSession.status == status)
+    result = await db.execute(q)
     return result.scalars().all()
 
 @router.get("/{session_id}")
@@ -70,6 +112,35 @@ async def get_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+@router.get("/{session_id}/summary")
+async def get_session_summary(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    session = await db.get(TradingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    trades_result = await db.execute(
+        select(PaperTrade).where(PaperTrade.session_id == session_id)
+    )
+    trades = [
+        {"pnl": float(t.pnl) if t.pnl is not None else None, "status": t.status}
+        for t in trades_result.scalars().all()
+    ]
+
+    summary = compute_period_summary(trades, float(session.starting_capital))
+
+    end_time = session.closed_at or datetime.now(timezone.utc)
+    duration_seconds = int((end_time - session.created_at).total_seconds())
+
+    return {
+        **summary,
+        "duration_seconds": duration_seconds,
+        "symbol": session.symbol,
+        "strategy": session.strategy,
+        "starting_capital": float(session.starting_capital),
+        "status": session.status,
+    }
+
 
 @router.patch("/{session_id}")
 async def update_session(session_id: uuid.UUID, req: UpdateSessionRequest, db: AsyncSession = Depends(get_db)):

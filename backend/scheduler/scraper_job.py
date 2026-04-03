@@ -79,6 +79,7 @@ async def _scrape_symbol(symbol: str):
         await _trigger_watchlist_signals(symbol, bar.close)
 
 _ALPACA_MODES = ("alpaca_paper", "alpaca_live")
+_IBKR_MODES = ("ibkr_live",)
 
 
 async def _trigger_strategy(symbol: str, current_price: float):
@@ -86,7 +87,7 @@ async def _trigger_strategy(symbol: str, current_price: float):
     from datetime import datetime, timezone
     from executor.paper import PaperExecutor
     from executor.alpaca import AlpacaExecutor
-    from strategies.registry import STRATEGY_REGISTRY
+    from executor.ibkr import IBKRConnector
     from risk.engine import (
         should_stop_loss,
         should_take_profit,
@@ -107,7 +108,7 @@ async def _trigger_strategy(symbol: str, current_price: float):
             select(TradingSession).where(
                 TradingSession.symbol == symbol,
                 TradingSession.status == "active",
-                TradingSession.mode.in_(["paper", "alpaca_paper", "alpaca_live"]),
+                TradingSession.mode.in_(["paper", "alpaca_paper", "alpaca_live", "ibkr_live"]),
             )
         )
         sessions = result.scalars().all()
@@ -115,6 +116,8 @@ async def _trigger_strategy(symbol: str, current_price: float):
     for session in sessions:
         if session.mode in _ALPACA_MODES:
             executor = AlpacaExecutor(paper=(session.mode == "alpaca_paper"))
+        elif session.mode in _IBKR_MODES:
+            executor = None  # IBKRConnector created per-trade with connect/disconnect lifecycle
         else:
             executor = PaperExecutor()
 
@@ -239,7 +242,8 @@ async def _trigger_strategy(symbol: str, current_price: float):
                 )
             )
             for open_trade in open_result.scalars().all():
-                await executor.close_trade(open_trade, current_price, db)
+                if executor is not None:
+                    await executor.close_trade(open_trade, current_price, db)
 
             if session.mode in _ALPACA_MODES:
                 order_result = await executor.execute(session, signal, current_price, db)
@@ -253,9 +257,23 @@ async def _trigger_strategy(symbol: str, current_price: float):
                         timestamp_open=datetime.now(timezone.utc),
                         status="open",
                         alpaca_order_id=order_result["order_id"],
+                        reasoning=signal.reasoning,
                     )
                     db.add(trade)
                     await db.commit()
+            elif session.mode in _IBKR_MODES:
+                # IBKRConnector self-persists trade via _persist_trade(); requires
+                # explicit connect/disconnect lifecycle around each execution.
+                connector = IBKRConnector()
+                try:
+                    await connector.connect()
+                    await connector.execute(session, signal, current_price, db)
+                except Exception as exc:
+                    logger.warning(
+                        "Session %s: IBKR execution error: %s", session.id, exc
+                    )
+                finally:
+                    await connector.disconnect()
             else:
                 await executor.execute(session, signal, current_price, db)
         logger.info(
