@@ -16,6 +16,14 @@ def register_symbol(symbol: str):
 def unregister_symbol(symbol: str):
     _active_symbols.discard(symbol.upper())
 
+# Aliases used by the watchlist router (Task 5 will expand these to also
+# schedule per-symbol evaluation jobs)
+def register_watchlist_symbol(symbol: str):
+    _active_symbols.add(symbol.upper())
+
+def unregister_watchlist_symbol(symbol: str):
+    _active_symbols.discard(symbol.upper())
+
 async def _scrape_all():
     if not is_market_open():
         return
