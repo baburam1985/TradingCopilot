@@ -79,6 +79,33 @@ If Docker is not available in the current environment, explicitly state: *"Integ
 
 ---
 
+## Git Policy — Push After Every Task
+
+Every task is **not done** until all committed code has been pushed to the remote repository. This applies to all agents, subagents, and human contributors.
+
+### Required steps at task completion
+
+1. Commit all changes with a descriptive message.
+2. Push to the remote tracking branch:
+   ```bash
+   git push origin <current-branch>
+   ```
+3. If pushing for the first time on a new branch:
+   ```bash
+   git push -u origin <current-branch>
+   ```
+
+### Prerequisite
+
+A remote named `origin` must be configured. If no remote exists, add it before any work begins:
+```bash
+git remote add origin <repo-url>
+```
+
+**Never mark a task complete without confirming the push succeeded.** If no remote is configured, state: *"Push not completed — no remote configured."* and flag it for the human to set up before the task can be closed.
+
+---
+
 ## Out of Scope (for now)
 - Multi-asset portfolios (single stock per session initially)
 - Options, futures, or crypto (equities only initially)
