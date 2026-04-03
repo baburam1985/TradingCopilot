@@ -43,3 +43,17 @@ async def websocket_session(websocket: WebSocket, session_id: uuid.UUID):
         pass
     finally:
         notification_broadcaster.unregister(session_id)
+
+
+@router.websocket("/ws/watchlist")
+async def websocket_watchlist(websocket: WebSocket):
+    await websocket.accept()
+    notification_broadcaster.register_watchlist(websocket)
+    try:
+        while True:
+            # Keep connection alive; all data pushed server-side via broadcaster
+            await asyncio.sleep(30)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        notification_broadcaster.unregister_watchlist(websocket)
