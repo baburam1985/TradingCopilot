@@ -156,6 +156,10 @@ def _make_fake_db():
     """Return a mock async db session. add() is sync; commit/refresh are async."""
     db = AsyncMock()
     db.add = MagicMock()  # SQLAlchemy Session.add() is synchronous
+    # Support the push subscription query added to alert_engine: returns empty list
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=result_mock)
     return db
 
 

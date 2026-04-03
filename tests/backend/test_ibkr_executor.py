@@ -410,6 +410,10 @@ async def test_poll_for_fill_returns_none_when_trade_is_none():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not __import__("importlib").util.find_spec("ib_insync"),
+    reason="ib_insync not installed",
+)
 @pytest.mark.asyncio
 async def test_ibkr_paper_trading_connect():
     """Smoke test: connect to IBKR TWS paper endpoint.

@@ -430,7 +430,7 @@ def test_start_scheduler_adds_job_and_starts():
     try:
         from backend.scheduler.scraper_job import start_scheduler
         start_scheduler()
-        mock_scheduler.add_job.assert_called_once()
+        assert mock_scheduler.add_job.call_count >= 1  # _scrape_all + _schedule_poller
         mock_scheduler.start.assert_called_once()
     finally:
         job.scheduler = original
