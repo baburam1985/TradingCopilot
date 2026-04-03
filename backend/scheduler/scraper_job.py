@@ -76,8 +76,7 @@ async def _trigger_strategy(symbol: str, current_price: float):
     from models.paper_trade import PaperTrade
     from models.price_history import PriceHistory
     from sqlalchemy import select, func
-    from notifications.broadcaster import notification_broadcaster, build_notification_payload
-    from notifications.email import send_trade_email
+    from notifications.alert_engine import AlertEngine
 
     logger = logging.getLogger(__name__)
 
@@ -120,18 +119,15 @@ async def _trigger_strategy(symbol: str, current_price: float):
                         reason,
                         current_price,
                     )
-                    payload = build_notification_payload(
+                    event_type = "stop_loss" if hit_sl else "take_profit"
+                    await AlertEngine().fire(
+                        session=session,
+                        event_type=event_type,
                         level="warning",
                         title=f"{reason.replace('-', ' ').title()} Triggered",
                         message=f"{symbol}: trade closed at ${current_price:.2f} ({reason})",
+                        db=db,
                     )
-                    await notification_broadcaster.broadcast(session.id, payload)
-                    if session.notify_email and session.email_address:
-                        send_trade_email(
-                            to_address=session.email_address,
-                            subject=f"TradingCopilot: {reason.title()} on {symbol}",
-                            body=f"Your {reason} was triggered for {symbol}.\nTrade closed at ${current_price:.2f}.",
-                        )
 
         # --- Risk: daily max loss circuit breaker ---
         if session.daily_max_loss_pct is not None:
@@ -162,17 +158,14 @@ async def _trigger_strategy(symbol: str, current_price: float):
                     daily_pnl,
                     session.daily_max_loss_pct,
                 )
-                payload = build_notification_payload(
-                    level="danger",
-                    title="Daily Loss Limit Hit",
-                    message=f"{symbol}: session closed — daily loss limit reached (P&L: ${daily_pnl:.2f})",
-                )
-                await notification_broadcaster.broadcast(session.id, payload)
-                if session.notify_email and session.email_address:
-                    send_trade_email(
-                        to_address=session.email_address,
-                        subject=f"TradingCopilot: Daily loss limit hit for {symbol}",
-                        body=f"Your daily max loss limit was breached for {symbol}.\nSession closed. Daily P&L: ${daily_pnl:.2f}.",
+                async with AsyncSessionLocal() as db:
+                    await AlertEngine().fire(
+                        session=session,
+                        event_type="daily_loss_limit",
+                        level="danger",
+                        title="Daily Loss Limit Hit",
+                        message=f"{symbol}: session closed — daily loss limit reached (P&L: ${daily_pnl:.2f})",
+                        db=db,
                     )
                 continue
 
@@ -250,17 +243,14 @@ async def _trigger_strategy(symbol: str, current_price: float):
             current_price,
             signal.reason,
         )
-        payload = build_notification_payload(
-            level="info",
-            title=f"{'Buy' if signal.action == 'buy' else 'Sell'} Signal",
-            message=f"{symbol}: {signal.action} at ${current_price:.2f} — {signal.reason}",
-        )
-        await notification_broadcaster.broadcast(session.id, payload)
-        if session.notify_email and session.email_address:
-            send_trade_email(
-                to_address=session.email_address,
-                subject=f"TradingCopilot: {signal.action.title()} signal for {symbol}",
-                body=f"A {signal.action} signal fired for {symbol}.\nPrice: ${current_price:.2f}\nReason: {signal.reason}",
+        async with AsyncSessionLocal() as db:
+            await AlertEngine().fire(
+                session=session,
+                event_type="trade_executed",
+                level="info",
+                title=f"{'Buy' if signal.action == 'buy' else 'Sell'} Signal",
+                message=f"{symbol}: {signal.action} at ${current_price:.2f} — {signal.reason}",
+                db=db,
             )
 
 def start_scheduler():

@@ -1,6 +1,7 @@
 import pytest
 import asyncio
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import uuid
 import sys
@@ -139,3 +140,162 @@ def test_send_trade_email_no_op_when_not_configured(monkeypatch):
             body="AAPL: bought at $150.00",
         )
         mock_smtp_cls.assert_not_called()
+
+
+# --- AlertEngine ---
+
+def _make_fake_session(notify_email=False, email_address=None):
+    session = MagicMock()
+    session.id = uuid.uuid4()
+    session.notify_email = notify_email
+    session.email_address = email_address
+    return session
+
+
+def _make_fake_db():
+    """Return a mock async db session. add() is sync; commit/refresh are async."""
+    db = AsyncMock()
+    db.add = MagicMock()  # SQLAlchemy Session.add() is synchronous
+    return db
+
+
+@pytest.mark.asyncio
+async def test_alert_engine_fire_persists(monkeypatch):
+    from notifications.alert_engine import AlertEngine
+    from models.alert_event import AlertEvent
+
+    session = _make_fake_session()
+    db = _make_fake_db()
+
+    # Patch broadcaster to avoid real WS calls
+    mock_broadcast = AsyncMock()
+    monkeypatch.setattr(
+        "notifications.alert_engine.notification_broadcaster.broadcast",
+        mock_broadcast,
+    )
+
+    engine = AlertEngine()
+    event = await engine.fire(
+        session=session,
+        event_type="trade_executed",
+        level="info",
+        title="Buy Signal",
+        message="AAPL: buy at $150",
+        db=db,
+    )
+
+    db.add.assert_called_once()
+    added = db.add.call_args[0][0]
+    assert isinstance(added, AlertEvent)
+    assert added.event_type == "trade_executed"
+    assert added.level == "info"
+    assert added.session_id == session.id
+    assert db.commit.called
+
+
+@pytest.mark.asyncio
+async def test_alert_engine_fire_broadcasts(monkeypatch):
+    from notifications.alert_engine import AlertEngine
+
+    session = _make_fake_session()
+    db = _make_fake_db()
+
+    mock_broadcast = AsyncMock()
+    monkeypatch.setattr(
+        "notifications.alert_engine.notification_broadcaster.broadcast",
+        mock_broadcast,
+    )
+
+    engine = AlertEngine()
+    await engine.fire(
+        session=session,
+        event_type="trade_executed",
+        level="info",
+        title="Buy Signal",
+        message="AAPL: buy at $150",
+        db=db,
+    )
+
+    mock_broadcast.assert_called_once()
+    call_args = mock_broadcast.call_args[0]
+    assert call_args[0] == session.id
+    assert call_args[1]["level"] == "info"
+    assert call_args[1]["title"] == "Buy Signal"
+
+
+@pytest.mark.asyncio
+async def test_alert_engine_fire_sends_email_when_configured(monkeypatch):
+    from notifications.alert_engine import AlertEngine
+
+    session = _make_fake_session(notify_email=True, email_address="trader@example.com")
+    db = _make_fake_db()
+
+    monkeypatch.setattr(
+        "notifications.alert_engine.notification_broadcaster.broadcast",
+        AsyncMock(),
+    )
+    # The lazy import inside fire() resolves to notifications.email.send_trade_email
+    mock_send = MagicMock()
+    monkeypatch.setattr("notifications.email.send_trade_email", mock_send)
+
+    engine = AlertEngine()
+    await engine.fire(
+        session=session,
+        event_type="trade_executed",
+        level="info",
+        title="Buy Signal",
+        message="AAPL: buy at $150",
+        db=db,
+    )
+
+    mock_send.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_alert_engine_fire_email_failure_does_not_propagate(monkeypatch):
+    from notifications.alert_engine import AlertEngine
+
+    session = _make_fake_session(notify_email=True, email_address="trader@example.com")
+    db = _make_fake_db()
+
+    monkeypatch.setattr(
+        "notifications.alert_engine.notification_broadcaster.broadcast",
+        AsyncMock(),
+    )
+    # Make send_trade_email raise so we can verify the failure is swallowed
+    monkeypatch.setattr(
+        "notifications.email.send_trade_email",
+        MagicMock(side_effect=Exception("SMTP error")),
+    )
+
+    engine = AlertEngine()
+    # Must not raise
+    await engine.fire(
+        session=session,
+        event_type="trade_executed",
+        level="info",
+        title="Buy Signal",
+        message="AAPL: buy at $150",
+        db=db,
+    )
+
+
+@pytest.mark.asyncio
+async def test_alert_engine_fire_no_session():
+    from notifications.alert_engine import AlertEngine
+    from models.alert_event import AlertEvent
+
+    db = _make_fake_db()
+
+    engine = AlertEngine()
+    event = await engine.fire(
+        session=None,
+        event_type="session_ended",
+        level="info",
+        title="Session ended",
+        message="No session context",
+        db=db,
+    )
+
+    added = db.add.call_args[0][0]
+    assert added.session_id is None

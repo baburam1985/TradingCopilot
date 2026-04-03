@@ -114,11 +114,21 @@ async def test_buy_signal_creates_trade_autonomously():
     mock_executor = AsyncMock()
     mock_executor_cls = MagicMock(return_value=mock_executor)
 
-    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+    alert_db = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx():
+        yield alert_db
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx, alert_ctx)
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.paper.PaperExecutor", mock_executor_cls):
+         patch("executor.paper.PaperExecutor", mock_executor_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 150.0)
 
     mock_strategy.analyze.assert_called_once()
@@ -181,11 +191,21 @@ async def test_sell_signal_closes_open_buy_trade():
     mock_executor = AsyncMock()
     mock_executor_cls = MagicMock(return_value=mock_executor)
 
-    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+    alert_db = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx():
+        yield alert_db
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx, alert_ctx)
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.paper.PaperExecutor", mock_executor_cls):
+         patch("executor.paper.PaperExecutor", mock_executor_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 160.0)
 
     mock_executor.close_trade.assert_called_once_with(open_buy_trade, 160.0, exec_db_inner)
@@ -219,11 +239,21 @@ async def test_buy_signal_closes_open_sell_trade():
     mock_executor = AsyncMock()
     mock_executor_cls = MagicMock(return_value=mock_executor)
 
-    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+    alert_db = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx():
+        yield alert_db
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx, alert_ctx)
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.paper.PaperExecutor", mock_executor_cls):
+         patch("executor.paper.PaperExecutor", mock_executor_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 140.0)
 
     mock_executor.close_trade.assert_called_once_with(open_sell_trade, 140.0, exec_db_inner)
@@ -303,11 +333,30 @@ async def test_multiple_sessions_all_executed():
 
     risk_check_db_a = _db_ctx([_db_result([])])
     risk_check_db_b = _db_ctx([_db_result([])])
-    factory = _chained_db_factory(sessions_db, risk_check_db_a, history_db_a, exec_ctx_a, risk_check_db_b, history_db_b, exec_ctx_b)
+    alert_db_a = AsyncMock()
+    alert_db_b = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx_a():
+        yield alert_db_a
+
+    @asynccontextmanager
+    async def alert_ctx_b():
+        yield alert_db_b
+
+    factory = _chained_db_factory(
+        sessions_db,
+        risk_check_db_a, history_db_a, exec_ctx_a, alert_ctx_a,
+        risk_check_db_b, history_db_b, exec_ctx_b, alert_ctx_b,
+    )
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.paper.PaperExecutor", mock_executor_cls):
+         patch("executor.paper.PaperExecutor", mock_executor_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 155.0)
 
     assert mock_executor.execute.call_count == 2
@@ -348,11 +397,21 @@ async def test_alpaca_paper_session_uses_alpaca_executor():
     })
     mock_alpaca_cls = MagicMock(return_value=mock_executor)
 
-    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+    alert_db = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx():
+        yield alert_db
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx, alert_ctx)
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls):
+         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 150.0)
 
     mock_alpaca_cls.assert_called_once_with(paper=True)
@@ -394,11 +453,21 @@ async def test_alpaca_live_session_uses_alpaca_executor_paper_false():
     })
     mock_alpaca_cls = MagicMock(return_value=mock_executor)
 
-    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+    alert_db = AsyncMock()
+
+    @asynccontextmanager
+    async def alert_ctx():
+        yield alert_db
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx, alert_ctx)
+
+    mock_alert_engine = AsyncMock()
+    mock_alert_cls = MagicMock(return_value=mock_alert_engine)
 
     with patch("database.AsyncSessionLocal", new=factory), \
          patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
-         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls):
+         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls), \
+         patch("notifications.alert_engine.AlertEngine", mock_alert_cls):
         await _trigger_strategy("AAPL", 200.0)
 
     mock_alpaca_cls.assert_called_once_with(paper=False)
