@@ -335,3 +335,180 @@ class TestOptimizeStrategy:
             assert "Too many" in resp.json()["detail"]
         finally:
             app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /backtest/walk-forward
+# ---------------------------------------------------------------------------
+
+class TestWalkForward:
+    @pytest.mark.asyncio
+    async def test_walk_forward_returns_windows_and_aggregate(self):
+        db = _make_mock_db()
+
+        # 90 bars: enough for train=30d + test=10d with multiple windows
+        from datetime import date, timedelta
+        bars = [
+            _make_price_bar(
+                close=100.0 + i * 0.2,
+                ts=datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=i),
+            )
+            for i in range(90)
+        ]
+        _mock_execute(db, bars)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post("/backtest/walk-forward", json={
+                    "symbol": "AAPL",
+                    "strategy": "moving_average_crossover",
+                    "strategy_params": {"short_window": 3, "long_window": 7},
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-04-01",
+                    "train_window_days": 30,
+                    "test_window_days": 10,
+                    "step_days": 10,
+                    "starting_capital": 1000.0,
+                    "param_grid": {},
+                })
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "windows" in data
+            assert "aggregate" in data
+            assert isinstance(data["windows"], list)
+            agg = data["aggregate"]
+            assert "num_windows" in agg
+            assert "avg_test_pnl" in agg
+            assert "consistency_score" in agg
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_walk_forward_400_unknown_strategy(self):
+        db = _make_mock_db()
+        _mock_execute(db, [])
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post("/backtest/walk-forward", json={
+                    "symbol": "AAPL",
+                    "strategy": "unknown_xyz",
+                    "strategy_params": {},
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-06-01",
+                    "train_window_days": 30,
+                    "test_window_days": 10,
+                    "step_days": 10,
+                    "starting_capital": 1000.0,
+                })
+            assert resp.status_code == 400
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_walk_forward_422_no_price_data(self):
+        db = _make_mock_db()
+        _mock_execute(db, [])
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post("/backtest/walk-forward", json={
+                    "symbol": "AAPL",
+                    "strategy": "rsi",
+                    "strategy_params": {},
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-06-01",
+                    "train_window_days": 30,
+                    "test_window_days": 10,
+                    "step_days": 10,
+                    "starting_capital": 1000.0,
+                })
+            assert resp.status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# GET /backtest/benchmark
+# ---------------------------------------------------------------------------
+
+class TestBenchmarkEndpoint:
+    @pytest.mark.asyncio
+    async def test_benchmark_returns_correct_structure(self):
+        db = _make_mock_db()
+
+        bars = [
+            _make_price_bar(
+                close=100.0 + i * 5.0,
+                ts=datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=i),
+            )
+            for i in range(10)
+        ]
+        _mock_execute(db, bars)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(
+                    "/backtest/benchmark",
+                    params={
+                        "symbol": "AAPL",
+                        "start_date": "2024-01-01",
+                        "end_date": "2024-01-10",
+                        "capital": 1000.0,
+                    },
+                )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "bnh_return_pct" in data
+            assert "bnh_final_value" in data
+            assert "bnh_equity_curve" in data
+            assert data["symbol"] == "AAPL"
+            # Buy at 100, last bar at 100 + 9*5 = 145 → +45%
+            assert data["bnh_return_pct"] == pytest.approx(45.0, rel=1e-3)
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_benchmark_422_no_data(self):
+        db = _make_mock_db()
+        _mock_execute(db, [])
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(
+                    "/backtest/benchmark",
+                    params={
+                        "symbol": "AAPL",
+                        "start_date": "2024-01-01",
+                        "end_date": "2024-01-10",
+                        "capital": 1000.0,
+                    },
+                )
+            assert resp.status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_benchmark_400_invalid_date(self):
+        db = _make_mock_db()
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(
+                    "/backtest/benchmark",
+                    params={
+                        "symbol": "AAPL",
+                        "start_date": "not-a-date",
+                        "end_date": "2024-01-10",
+                        "capital": 1000.0,
+                    },
+                )
+            assert resp.status_code == 400
+        finally:
+            app.dependency_overrides.clear()

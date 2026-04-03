@@ -5,13 +5,16 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 from database import get_db
 from models.price_history import PriceHistory
 from strategies.registry import STRATEGY_REGISTRY
 from backtester.runner import BacktestRunner
 from pnl.aggregator import compute_period_summary
 from backtester.compare import run_comparison
+from backtester.benchmark import BenchmarkCalculator
+from backtester.walk_forward import WalkForwardEngine
 
 router = APIRouter()
 
@@ -39,6 +42,19 @@ class CompareRequest(BaseModel):
 
 
 _MAX_OPTIMIZE_COMBINATIONS = 100
+
+
+class WalkForwardRequest(BaseModel):
+    symbol: str
+    strategy: str
+    strategy_params: dict = Field(default_factory=dict)
+    start_date: str
+    end_date: str
+    train_window_days: int = Field(ge=5, le=1825)
+    test_window_days: int = Field(ge=1, le=365)
+    step_days: int = Field(ge=1, le=365)
+    starting_capital: float
+    param_grid: dict[str, list] = Field(default_factory=dict)
 
 
 class OptimizeRequest(BaseModel):
@@ -233,3 +249,89 @@ async def optimize_strategy(req: OptimizeRequest, db: AsyncSession = Depends(get
     results.sort(key=lambda r: (r.sharpe_ratio is not None, r.sharpe_ratio or 0.0), reverse=True)
 
     return OptimizeResponse(combinations_tested=len(all_combinations), results=results)
+
+
+@router.post("/walk-forward")
+async def run_walk_forward(req: WalkForwardRequest, db: AsyncSession = Depends(get_db)):
+    """Walk-forward backtesting: train on rolling windows, validate out-of-sample."""
+    if req.strategy not in STRATEGY_REGISTRY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown strategy: '{req.strategy}'. Available: {list(STRATEGY_REGISTRY.keys())}",
+        )
+
+    from_dt = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
+    to_dt = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+
+    result = await db.execute(
+        select(PriceHistory)
+        .where(
+            PriceHistory.symbol == req.symbol.upper(),
+            PriceHistory.timestamp >= from_dt,
+            PriceHistory.timestamp <= to_dt,
+        )
+        .order_by(PriceHistory.timestamp.asc())
+    )
+    bars = result.scalars().all()
+
+    if not bars:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No price data found for {req.symbol.upper()} in the requested date range.",
+        )
+
+    try:
+        engine = WalkForwardEngine(
+            strategy_name=req.strategy,
+            strategy_params=req.strategy_params,
+            param_grid=req.param_grid,
+            train_window_days=req.train_window_days,
+            test_window_days=req.test_window_days,
+            step_days=req.step_days,
+            starting_capital=req.starting_capital,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return engine.run(bars)
+
+
+@router.get("/benchmark")
+async def get_benchmark(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    capital: float = Query(gt=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Standalone buy-and-hold benchmark for a symbol/date range."""
+    try:
+        from_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        to_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    result = await db.execute(
+        select(PriceHistory)
+        .where(
+            PriceHistory.symbol == symbol.upper(),
+            PriceHistory.timestamp >= from_dt,
+            PriceHistory.timestamp <= to_dt,
+        )
+        .order_by(PriceHistory.timestamp.asc())
+    )
+    bars = result.scalars().all()
+
+    if not bars:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No price data found for {symbol.upper()} in the requested date range.",
+        )
+
+    return {
+        "symbol": symbol.upper(),
+        "start_date": start_date,
+        "end_date": end_date,
+        "starting_capital": capital,
+        **BenchmarkCalculator.compute(bars, capital),
+    }
