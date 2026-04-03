@@ -6,6 +6,7 @@ const api = axios.create({
 });
 
 export const getSessions = (filters = {}) => api.get("/sessions", { params: filters });
+export const getSession = (sessionId) => api.get(`/sessions/${sessionId}`);
 export const getSessionSummary = (sessionId) => api.get(`/sessions/${sessionId}/summary`);
 export const createSession = (data) => api.post("/sessions", data);
 export const stopSession = (id) => api.patch(`/sessions/${id}/stop`);
@@ -26,6 +27,7 @@ export const markAllAlertsRead = (sessionId) =>
   api.post("/alerts/mark-all-read", null, { params: { session_id: sessionId } });
 export const updateSession = (id, data) => api.patch(`/sessions/${id}`, data);
 export const getIndicators = (sessionId) => api.get(`/sessions/${sessionId}/indicators`);
+export const getChartData = (sessionId) => api.get(`/sessions/${sessionId}/chart-data`);
 
 export const getNotes = (tradeId) => api.get(`/trades/${tradeId}/notes`);
 export const createNote = (tradeId, body, tags) => api.post(`/trades/${tradeId}/notes`, { body, tags });

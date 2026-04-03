@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from scheduler.scraper_job import start_scheduler, stop_scheduler
-from routers import sessions, market_data, strategies, trades, backtest, websocket, alerts, notes, indicators, push, schedules, watchlist, optimizer
+from routers import sessions, market_data, strategies, trades, backtest, websocket, alerts, notes, indicators, push, schedules, watchlist, optimizer, chart_data
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +24,7 @@ app.include_router(indicators.router, prefix="/sessions", tags=["indicators"])
 app.include_router(push.router, prefix="/push", tags=["push"])
 app.include_router(schedules.router, prefix="/sessions/schedules", tags=["schedules"])
 app.include_router(optimizer.router, prefix="/sessions", tags=["optimizer"])
+app.include_router(chart_data.router, prefix="/sessions", tags=["chart-data"])
 
 @app.get("/health", tags=["health"])
 async def health():

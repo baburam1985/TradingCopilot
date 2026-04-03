@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { getTrades, getLatestPrice, getIndicators } from "../api/client";
-import { createSessionSocket } from "../api/client";
-import PriceChart from "../components/PriceChart";
+import { getTrades, getLatestPrice, getSession, createSessionSocket } from "../api/client";
+import SessionChart from "../components/SessionChart";
 import TradeLog from "../components/TradeLog";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
@@ -10,43 +9,29 @@ import { useNotifications } from "../context/NotificationContext";
 
 export default function LiveDashboard() {
   const { sessionId } = useParams();
-  const [bars, setBars] = useState([]);
   const [trades, setTrades] = useState([]);
   const [latestPrice, setLatestPrice] = useState(null);
-  const [indicators, setIndicators] = useState(null);
-  const [activeIndicators, setActiveIndicators] = useState(new Set());
+  const [session, setSession] = useState(null);
   const wsRef = useRef(null);
   const { addNotification, hydrate } = useNotifications();
 
   useEffect(() => {
     getTrades(sessionId).then(r => setTrades(r.data));
-    getIndicators(sessionId).then(r => setIndicators(r.data)).catch(() => {});
+    getSession(sessionId).then(r => setSession(r.data)).catch(() => {});
 
     wsRef.current = createSessionSocket(sessionId, (msg) => {
       if (msg.type === "price_update") {
         setLatestPrice(msg.close);
-        setBars(prev => [...prev.slice(-199), { timestamp: msg.timestamp, close: msg.close }]);
         getTrades(sessionId).then(r => setTrades(r.data));
-        getIndicators(sessionId).then(r => setIndicators(r.data)).catch(() => {});
       } else if (msg.type === "notification") {
         addNotification(msg);
       }
     });
 
-    // Hydrate notification history from persisted alerts once WS is set up.
     hydrate(sessionId);
 
     return () => wsRef.current?.close();
   }, [sessionId]);
-
-  function handleToggleIndicator(key) {
-    setActiveIndicators(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   const openTrade = trades.find(t => t.status === "open");
   const unrealizedPnl = openTrade && latestPrice
@@ -68,32 +53,30 @@ export default function LiveDashboard() {
         subtitle={sessionId ? `Session ${sessionId}` : "Monitoring active session"}
       />
 
-      {/* Metrics row — horizontal scroll on mobile */}
+      {/* Metrics row */}
       <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">
-      <div className="grid grid-cols-4 gap-4 min-w-[480px] sm:min-w-0">
-        <MetricCard
-          label="Current Price"
-          value={latestPrice ? `$${latestPrice.toFixed(2)}` : "—"}
-          valueColor="green"
-        />
-        <MetricCard
-          label="Open P&L"
-          value={unrealizedPnl !== null ? `$${unrealizedPnl}` : "—"}
-          valueColor={unrealizedPnl !== null ? (unrealizedPnl > 0 ? "green" : "red") : undefined}
-        />
-        <MetricCard label="Total Trades" value={totalTrades > 0 ? totalTrades : "—"} />
-        <MetricCard label="Win Rate" value={winRate} valueColor={winRate !== "—" ? "green" : undefined} />
-      </div>
+        <div className="grid grid-cols-4 gap-4 min-w-[480px] sm:min-w-0">
+          <MetricCard
+            label="Current Price"
+            value={latestPrice ? `$${latestPrice.toFixed(2)}` : "—"}
+            valueColor="green"
+          />
+          <MetricCard
+            label="Open P&L"
+            value={unrealizedPnl !== null ? `$${unrealizedPnl}` : "—"}
+            valueColor={unrealizedPnl !== null ? (unrealizedPnl > 0 ? "green" : "red") : undefined}
+          />
+          <MetricCard label="Total Trades" value={totalTrades > 0 ? totalTrades : "—"} />
+          <MetricCard label="Win Rate" value={winRate} valueColor={winRate !== "—" ? "green" : undefined} />
+        </div>
       </div>
 
-      {/* Charts */}
+      {/* Session Chart — full width, above trade log */}
       <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
-        <PriceChart
-          bars={bars}
-          trades={trades}
-          indicators={indicators}
-          activeIndicators={activeIndicators}
-          onToggleIndicator={handleToggleIndicator}
+        <SessionChart
+          sessionId={sessionId}
+          strategy={session?.strategy}
+          isActive={session?.status === "active"}
         />
       </div>
 

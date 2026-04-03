@@ -13,7 +13,7 @@ from strategies.macd import _compute_macd
 
 router = APIRouter()
 
-ALL_INDICATORS = {"sma", "ema", "bollinger", "rsi", "macd"}
+ALL_INDICATORS = {"sma", "ema", "bollinger", "rsi", "macd", "vwap", "breakout", "mean_reversion"}
 
 # Default parameters
 SMA_PERIOD = 20
@@ -84,6 +84,63 @@ def _compute_rsi_series(closes: list[float], period: int) -> list[Optional[float
     return result
 
 
+def _compute_vwap_series(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    volumes: list[float],
+    period: int,
+) -> list[Optional[float]]:
+    """Rolling VWAP using typical price = (high + low + close) / 3."""
+    result = []
+    for i in range(len(closes)):
+        if i + 1 < period:
+            result.append(None)
+        else:
+            window_closes = closes[i - period + 1 : i + 1]
+            window_highs = highs[i - period + 1 : i + 1]
+            window_lows = lows[i - period + 1 : i + 1]
+            window_vols = volumes[i - period + 1 : i + 1]
+            typical = [(h + l + c) / 3 for h, l, c in zip(window_highs, window_lows, window_closes)]
+            total_vol = sum(window_vols)
+            if total_vol == 0:
+                result.append(sum(typical) / period)
+            else:
+                result.append(sum(p * v for p, v in zip(typical, window_vols)) / total_vol)
+    return result
+
+
+def _compute_breakout_series(
+    closes: list[float], period: int
+) -> list[Optional[dict]]:
+    """Rolling N-bar channel high and low (support/resistance levels)."""
+    result = []
+    for i in range(len(closes)):
+        if i + 1 < period:
+            result.append(None)
+        else:
+            window = closes[i - period + 1 : i + 1]
+            result.append({"high": max(window), "low": min(window)})
+    return result
+
+
+def _compute_mean_reversion_series(
+    closes: list[float], period: int
+) -> list[Optional[dict]]:
+    """Rolling mean ± 2-std-dev bands (mean reversion reference levels)."""
+    result = []
+    for i in range(len(closes)):
+        if i + 1 < period:
+            result.append(None)
+        else:
+            window = closes[i - period + 1 : i + 1]
+            mean = sum(window) / period
+            variance = sum((p - mean) ** 2 for p in window) / period
+            std = math.sqrt(variance)
+            result.append({"mean": mean, "upper": mean + 2 * std, "lower": mean - 2 * std})
+    return result
+
+
 def _compute_macd_series(
     closes: list[float], fast: int, slow: int, signal: int
 ) -> list[Optional[dict]]:
@@ -137,6 +194,9 @@ async def get_indicators(
 
     timestamps = [row.timestamp.isoformat() for row in rows]
     closes = [float(row.close) for row in rows]
+    highs = [float(row.high) for row in rows]
+    lows = [float(row.low) for row in rows]
+    volumes = [float(row.volume) if row.volume else 0.0 for row in rows]
 
     response: dict = {}
 
@@ -177,6 +237,30 @@ async def get_indicators(
         response["macd"] = [
             {"time": t, "macd": m["macd"], "signal": m["signal"], "histogram": m["histogram"]}
             for t, m in zip(timestamps, macd_vals)
+            if m is not None
+        ]
+
+    if "vwap" in requested:
+        vwap_vals = _compute_vwap_series(closes, highs, lows, volumes, SMA_PERIOD)
+        response["vwap"] = [
+            {"time": t, "value": v}
+            for t, v in zip(timestamps, vwap_vals)
+            if v is not None
+        ]
+
+    if "breakout" in requested:
+        breakout_vals = _compute_breakout_series(closes, SMA_PERIOD)
+        response["breakout"] = [
+            {"time": t, "high": b["high"], "low": b["low"]}
+            for t, b in zip(timestamps, breakout_vals)
+            if b is not None
+        ]
+
+    if "mean_reversion" in requested:
+        mr_vals = _compute_mean_reversion_series(closes, SMA_PERIOD)
+        response["mean_reversion"] = [
+            {"time": t, "mean": m["mean"], "upper": m["upper"], "lower": m["lower"]}
+            for t, m in zip(timestamps, mr_vals)
             if m is not None
         ]
 
