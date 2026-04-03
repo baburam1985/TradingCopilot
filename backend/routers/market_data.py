@@ -4,6 +4,7 @@ from sqlalchemy import select
 from datetime import datetime, timezone
 from database import get_db
 from models.price_history import PriceHistory
+from services.events_calendar import get_events
 import scrapers.yahoo as _yahoo_scraper
 
 router = APIRouter()
@@ -60,3 +61,33 @@ async def scrape_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(row)
     return row
+
+
+@router.get("/{symbol}/events")
+async def get_symbol_events(
+    symbol: str,
+    from_dt: datetime = Query(alias="from"),
+    to_dt: datetime = Query(alias="to"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return earnings, FOMC, and CPI events for a date range.
+
+    Macro events (fomc, cpi) are included regardless of symbol.
+    Earnings events are symbol-specific and fetched via yfinance with DB caching.
+    """
+    events = await get_events(
+        symbol=symbol.upper(),
+        from_date=from_dt.date(),
+        to_date=to_dt.date(),
+        db=db,
+    )
+    return [
+        {
+            "id": str(e.id),
+            "event_type": e.event_type,
+            "symbol": e.symbol,
+            "event_date": e.event_date.isoformat(),
+            "description": e.description,
+        }
+        for e in events
+    ]

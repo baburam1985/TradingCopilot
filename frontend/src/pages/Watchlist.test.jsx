@@ -6,27 +6,34 @@ import * as client from "../api/client";
 
 vi.mock("../api/client");
 
-const SESSIONS = [
+// Provide a no-op NotificationContext so Watchlist can render in tests
+vi.mock("../context/NotificationContext", () => ({
+  useNotifications: () => ({ addNotification: vi.fn() }),
+  NotificationProvider: ({ children }) => children,
+}));
+
+const WATCHLIST_ITEMS = [
   {
-    id: "session-1",
+    id: "item-1",
     symbol: "AAPL",
     strategy: "momentum",
-    mode: "paper",
-    status: "active",
-    starting_capital: 1000,
+    last_signal: "buy",
+    last_price: 150.25,
+    alert_threshold: 145.0,
+    created_at: "2023-01-10T00:00:00Z",
   },
   {
-    id: "session-2",
+    id: "item-2",
     symbol: "TSLA",
     strategy: "mean_reversion",
-    mode: "alpaca_live",
-    status: "active",
-    starting_capital: 500,
+    last_signal: "sell",
+    last_price: 220.5,
+    alert_threshold: null,
+    created_at: "2023-02-01T00:00:00Z",
   },
 ];
 
-const PNL_POSITIVE = { all_time: { total_pnl: 42.5, win_rate: 0.6 } };
-const PNL_NEGATIVE = { all_time: { total_pnl: -18.3, win_rate: 0.3 } };
+const MOCK_WS = { close: vi.fn(), onmessage: null };
 
 function renderWatchlist() {
   return render(
@@ -39,23 +46,13 @@ function renderWatchlist() {
 describe("Watchlist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    client.getSessions.mockResolvedValue({ data: SESSIONS });
-    client.getPnl.mockImplementation((id) =>
-      id === "session-1"
-        ? Promise.resolve({ data: PNL_POSITIVE })
-        : Promise.resolve({ data: PNL_NEGATIVE })
-    );
+    client.getWatchlist.mockResolvedValue({ data: WATCHLIST_ITEMS });
+    client.createWatchlistSocket.mockReturnValue(MOCK_WS);
+    client.deleteWatchlistItem.mockResolvedValue({});
+    client.createWatchlistItem.mockResolvedValue({ data: {} });
   });
 
-  it("renders a card for each session", async () => {
-    renderWatchlist();
-    await waitFor(() => {
-      const cards = screen.getAllByTestId("session-card");
-      expect(cards).toHaveLength(SESSIONS.length);
-    });
-  });
-
-  it("shows session symbols on the cards", async () => {
+  it("renders a row for each watchlist item", async () => {
     renderWatchlist();
     await waitFor(() => {
       expect(screen.getByText("AAPL")).toBeInTheDocument();
@@ -63,49 +60,48 @@ describe("Watchlist", () => {
     });
   });
 
-  it("shows paper badge for paper mode sessions", async () => {
+  it("shows the strategy for each item", async () => {
     renderWatchlist();
     await waitFor(() => {
-      expect(screen.getByText("AAPL")).toBeInTheDocument();
-    });
-    expect(screen.getAllByText("Paper").length).toBeGreaterThan(0);
-  });
-
-  it("shows live badge for live mode sessions", async () => {
-    renderWatchlist();
-    await waitFor(() => {
-      expect(screen.getByText("TSLA")).toBeInTheDocument();
-    });
-    expect(screen.getAllByText("Live").length).toBeGreaterThan(0);
-  });
-
-  it("renders positive P&L in green", async () => {
-    renderWatchlist();
-    await waitFor(() => {
-      const pnlValues = screen.getAllByTestId("pnl-value");
-      const positive = pnlValues.find((el) => el.textContent === "$42.50");
-      expect(positive).toBeDefined();
-      expect(positive.className).toContain("text-[#00e676]");
+      expect(screen.getByText("momentum")).toBeInTheDocument();
+      expect(screen.getByText("mean_reversion")).toBeInTheDocument();
     });
   });
 
-  it("renders negative P&L in red", async () => {
+  it("renders buy and sell signal badges", async () => {
     renderWatchlist();
     await waitFor(() => {
-      const pnlValues = screen.getAllByTestId("pnl-value");
-      const negative = pnlValues.find((el) => el.textContent === "$-18.30");
-      expect(negative).toBeDefined();
-      expect(negative.className).toContain("text-[#ff4444]");
+      expect(screen.getByText("buy")).toBeInTheDocument();
+      expect(screen.getByText("sell")).toBeInTheDocument();
     });
   });
 
-  it("shows a message when there are no sessions", async () => {
-    client.getSessions.mockResolvedValue({ data: [] });
+  it("displays last price when available", async () => {
     renderWatchlist();
     await waitFor(() => {
-      expect(
-        screen.getByText(/no sessions found/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText("$150.25")).toBeInTheDocument();
+      expect(screen.getByText("$220.50")).toBeInTheDocument();
     });
+  });
+
+  it("shows a message when the watchlist is empty", async () => {
+    client.getWatchlist.mockResolvedValue({ data: [] });
+    renderWatchlist();
+    await waitFor(() => {
+      expect(screen.getByText(/No symbols on your watchlist/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders Remove buttons for each item", async () => {
+    renderWatchlist();
+    await waitFor(() => {
+      const removeButtons = screen.getAllByText("Remove");
+      expect(removeButtons).toHaveLength(WATCHLIST_ITEMS.length);
+    });
+  });
+
+  it("shows page heading", async () => {
+    renderWatchlist();
+    expect(screen.getByText("Watchlist")).toBeInTheDocument();
   });
 });

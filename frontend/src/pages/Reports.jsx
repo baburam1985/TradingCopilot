@@ -1,6 +1,16 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { getSessions, getTrades, getPnl, getEquityCurve, exportJournal } from "../api/client";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ReferenceLine,
+} from "recharts";
+import { getSessions, getTrades, getPnl, getEquityCurve, exportJournal, getBenchmark } from "../api/client";
 import PnLChart from "../components/PnLChart";
 import EquityCurveChart from "../components/EquityCurveChart";
 import MultiEquityCurveChart from "../components/MultiEquityCurveChart";
@@ -9,6 +19,198 @@ import TradeLog from "../components/TradeLog";
 import ComparisonView from "../components/ComparisonView";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
+
+// ---------------------------------------------------------------------------
+// Benchmark Comparison Panel
+// ---------------------------------------------------------------------------
+
+function BenchmarkPanel({ backtestMeta, strategyEquityCurve }) {
+  const [benchmark, setBenchmark] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!backtestMeta) return;
+    const { symbol, start_date, end_date, starting_capital } = backtestMeta;
+    if (!symbol || !start_date || !end_date || !starting_capital) return;
+
+    setLoading(true);
+    getBenchmark(symbol, start_date, end_date, starting_capital)
+      .then((r) => setBenchmark(r.data))
+      .catch(() => setError("Could not load benchmark data."))
+      .finally(() => setLoading(false));
+  }, [backtestMeta]);
+
+  if (loading) {
+    return (
+      <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+        <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Buy &amp; Hold Benchmark</h2>
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-[#00e676] border-t-transparent rounded-full animate-spin" />
+          <span className="ml-3 text-[#888] text-sm">Loading benchmark…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !benchmark) return null;
+
+  const strategyFinalValue =
+    strategyEquityCurve.length > 0
+      ? strategyEquityCurve[strategyEquityCurve.length - 1].portfolio_value
+      : null;
+  const startingCapital = benchmark.starting_capital ?? backtestMeta?.starting_capital;
+  const strategyReturnPct =
+    strategyFinalValue != null
+      ? ((strategyFinalValue - startingCapital) / startingCapital) * 100
+      : null;
+  const alpha =
+    strategyReturnPct != null && benchmark.bnh_return_pct != null
+      ? strategyReturnPct - benchmark.bnh_return_pct * 100
+      : null;
+
+  // Build merged overlay: align strategy and benchmark by index position
+  // Both arrays may have different timestamps; we use index-aligned chart
+  const maxLen = Math.max(strategyEquityCurve.length, benchmark.bnh_equity_curve.length);
+  const overlayData = Array.from({ length: maxLen }, (_, i) => {
+    const sp = strategyEquityCurve[i];
+    const bp = benchmark.bnh_equity_curve[i];
+    return {
+      idx: i,
+      strategy: sp ? sp.portfolio_value : null,
+      benchmark: bp ? bp.value : null,
+      ts: sp?.timestamp ?? bp?.timestamp ?? "",
+    };
+  });
+
+  const formatTs = (ts) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+
+  const bnhReturnPct = benchmark.bnh_return_pct != null ? benchmark.bnh_return_pct * 100 : null;
+
+  return (
+    <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+      <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">
+        Buy &amp; Hold Benchmark
+      </h2>
+
+      {/* Metrics row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded p-3">
+          <div className="text-[#666] text-xs uppercase tracking-wider mb-1">BnH Return</div>
+          <div
+            className={`text-lg font-bold ${
+              bnhReturnPct != null
+                ? bnhReturnPct >= 0
+                  ? "text-[#00e676]"
+                  : "text-red-400"
+                : "text-[#555]"
+            }`}
+          >
+            {bnhReturnPct != null ? `${bnhReturnPct >= 0 ? "+" : ""}${bnhReturnPct.toFixed(2)}%` : "—"}
+          </div>
+        </div>
+        <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded p-3">
+          <div className="text-[#666] text-xs uppercase tracking-wider mb-1">BnH Final Value</div>
+          <div className="text-lg font-bold text-[#e0e0e0]">
+            {benchmark.bnh_final_value != null ? `$${benchmark.bnh_final_value.toFixed(2)}` : "—"}
+          </div>
+        </div>
+        <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded p-3">
+          <div className="text-[#666] text-xs uppercase tracking-wider mb-1">Strategy Return</div>
+          <div
+            className={`text-lg font-bold ${
+              strategyReturnPct != null
+                ? strategyReturnPct >= 0
+                  ? "text-[#00e676]"
+                  : "text-red-400"
+                : "text-[#555]"
+            }`}
+          >
+            {strategyReturnPct != null
+              ? `${strategyReturnPct >= 0 ? "+" : ""}${strategyReturnPct.toFixed(2)}%`
+              : "—"}
+          </div>
+        </div>
+        <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded p-3">
+          <div className="text-[#666] text-xs uppercase tracking-wider mb-1">Alpha</div>
+          <div
+            className={`text-lg font-bold ${
+              alpha != null ? (alpha > 0 ? "text-[#00e676]" : alpha < 0 ? "text-red-400" : "text-[#888]") : "text-[#555]"
+            }`}
+          >
+            {alpha != null ? `${alpha > 0 ? "+" : ""}${alpha.toFixed(2)}%` : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Overlay chart */}
+      {overlayData.length >= 2 && (
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={overlayData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <XAxis
+              dataKey="ts"
+              tickFormatter={formatTs}
+              tick={{ fontSize: 10, fill: "#666" }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: "#666" }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `$${v.toFixed(0)}`}
+              width={60}
+            />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="bg-[#1a1a1a] border border-[#333] rounded px-3 py-2 text-xs">
+                    <div className="text-[#888] mb-1">{formatTs(label)}</div>
+                    {payload.map((p) => (
+                      <div key={p.dataKey} style={{ color: p.color }} className="font-semibold">
+                        {p.name}: ${p.value != null ? p.value.toFixed(2) : "—"}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 11, color: "#888" }}
+              formatter={(value) => <span style={{ color: "#888" }}>{value}</span>}
+            />
+            <ReferenceLine y={startingCapital} stroke="#333" strokeDasharray="4 4" strokeWidth={1} />
+            <Line
+              type="monotone"
+              dataKey="strategy"
+              name="Strategy"
+              stroke="#00e676"
+              strokeWidth={2}
+              dot={false}
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="benchmark"
+              name="Buy & Hold"
+              stroke="#888"
+              strokeWidth={1.5}
+              strokeDasharray="5 3"
+              dot={false}
+              connectNulls
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Analytics tab
@@ -313,6 +515,7 @@ const TABS = ["ANALYTICS", "SESSION REPORT"];
 export default function Reports() {
   const location = useLocation();
   const backtestResult = location.state?.backtestResult;
+  const backtestMeta = location.state?.backtestMeta;
   const compareResult = location.state?.compareResult;
 
   const [activeTab, setActiveTab] = useState("ANALYTICS");
@@ -453,6 +656,10 @@ export default function Reports() {
             startingCapital={backtestStartingCapital}
           />
         </div>
+        <BenchmarkPanel
+          backtestMeta={backtestMeta}
+          strategyEquityCurve={backtestEquityCurve}
+        />
         <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
           <PnLChart trades={backtestResult.trades} />
           <ComparisonView trades={backtestResult.trades} summary={backtestResult.summary} />
