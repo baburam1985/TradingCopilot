@@ -1,13 +1,18 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from database import get_db
 from models.trading_session import TradingSession
+from models.paper_trade import PaperTrade
+from models.trade_note import TradeNote
 from scheduler.scraper_job import register_symbol, unregister_symbol
+from journal import build_journal_csv
 
 router = APIRouter()
 
@@ -88,3 +93,43 @@ async def stop_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     await db.commit()
     unregister_symbol(session.symbol)
     return session
+
+
+@router.get("/{session_id}/journal")
+async def export_journal(
+    session_id: uuid.UUID,
+    format: str = Query(default="csv"),
+    db: AsyncSession = Depends(get_db),
+):
+    if format != "csv":
+        raise HTTPException(status_code=400, detail="Only csv format supported")
+
+    session = await db.get(TradingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    trades_result = await db.execute(
+        select(PaperTrade)
+        .where(PaperTrade.session_id == session_id)
+        .order_by(PaperTrade.timestamp_open.asc())
+    )
+    trades = trades_result.scalars().all()
+
+    # Fetch all notes for these trades in one query
+    trade_ids = [t.id for t in trades]
+    notes_by_trade: dict = defaultdict(list)
+    if trade_ids:
+        notes_result = await db.execute(
+            select(TradeNote)
+            .where(TradeNote.trade_id.in_(trade_ids))
+            .order_by(TradeNote.created_at.asc())
+        )
+        for note in notes_result.scalars().all():
+            notes_by_trade[note.trade_id].append(note)
+
+    csv_content = build_journal_csv(trades, notes_by_trade)
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=journal_{session_id}.csv"},
+    )

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { getSessions, getTrades, getPnl, getEquityCurve } from "../api/client";
+import { getSessions, getTrades, getPnl, getEquityCurve, exportJournal } from "../api/client";
 import PnLChart from "../components/PnLChart";
 import EquityCurveChart from "../components/EquityCurveChart";
 import MultiEquityCurveChart from "../components/MultiEquityCurveChart";
@@ -323,6 +323,7 @@ export default function Reports() {
   const [trades, setTrades] = useState([]);
   const [pnl, setPnl] = useState(null);
   const [equityCurve, setEquityCurve] = useState([]);
+  const [exportingJournal, setExportingJournal] = useState(false);
 
   useEffect(() => {
     if (backtestResult) return;
@@ -341,6 +342,30 @@ export default function Reports() {
       setEquityCurve(ec.data);
     });
   }, [selectedId]);
+
+  const handleExportJournal = async () => {
+    if (!selectedId) return;
+    setExportingJournal(true);
+    try {
+      const r = await exportJournal(selectedId);
+      const url = URL.createObjectURL(new Blob([r.data], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `journal_${selectedId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    } finally {
+      setExportingJournal(false);
+    }
+  };
+
+  const sessionIndex = sessions.findIndex((s) => s.id === selectedId);
+  const hasPrev = sessionIndex > 0;
+  const hasNext = sessionIndex >= 0 && sessionIndex < sessions.length - 1;
+  const goToPrev = () => hasPrev && setSelectedId(sessions[sessionIndex - 1].id);
+  const goToNext = () => hasNext && setSelectedId(sessions[sessionIndex + 1].id);
 
   // Session-report derived metrics
   const totalSessions = backtestResult ? 1 : sessions.length;
@@ -589,9 +614,32 @@ export default function Reports() {
                 <ComparisonView trades={trades} summary={pnl} />
               </div>
               <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
-                <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">
-                  Trade Log
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-[#00e676] text-xs uppercase tracking-widest">Trade Log</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={goToPrev}
+                      disabled={!hasPrev}
+                      className="text-xs px-2 py-1 border border-[#333] rounded text-[#888] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ← Prev Session
+                    </button>
+                    <button
+                      onClick={goToNext}
+                      disabled={!hasNext}
+                      className="text-xs px-2 py-1 border border-[#333] rounded text-[#888] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Next Session →
+                    </button>
+                    <button
+                      onClick={handleExportJournal}
+                      disabled={exportingJournal || !selectedId}
+                      className="text-xs px-3 py-1 bg-[#00e676] text-[#0d0d0d] font-bold rounded hover:bg-[#00c853] disabled:opacity-50"
+                    >
+                      {exportingJournal ? "Exporting…" : "Export Journal"}
+                    </button>
+                  </div>
+                </div>
                 <TradeLog trades={trades} />
               </div>
             </>
