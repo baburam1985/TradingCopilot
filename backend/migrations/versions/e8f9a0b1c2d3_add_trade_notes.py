@@ -1,7 +1,7 @@
 """add trade_notes table
 
-Revision ID: e7f8a9b0c1d2
-Revises: d5e6f7a8b9c0
+Revision ID: e8f9a0b1c2d3
+Revises: e7f8a9b0c1d2
 Create Date: 2026-04-03 04:00:00.000000
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = 'e7f8a9b0c1d2'
-down_revision: Union[str, Sequence[str], None] = 'd5e6f7a8b9c0'
+revision: str = 'e8f9a0b1c2d3'
+down_revision: Union[str, Sequence[str], None] = 'e7f8a9b0c1d2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

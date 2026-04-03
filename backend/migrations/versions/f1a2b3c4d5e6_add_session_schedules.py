@@ -1,7 +1,7 @@
 """add session_schedules table and schedule columns on sessions
 
 Revision ID: f1a2b3c4d5e6
-Revises: e7f8a9b0c1d2
+Revises: e8f9a0b1c2d3
 Create Date: 2026-04-03 05:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'f1a2b3c4d5e6'
-down_revision: Union[str, None] = 'e7f8a9b0c1d2'
+down_revision: Union[str, None] = 'e8f9a0b1c2d3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
