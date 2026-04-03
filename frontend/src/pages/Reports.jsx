@@ -44,6 +44,13 @@ export default function Reports() {
     ? `${(parseFloat(pnl.win_rate) * 100).toFixed(0)}%`
     : "—";
 
+  const fmt2 = (v) => (v != null ? v.toFixed(2) : "—");
+  const sharpeDisplay = pnl?.sharpe_ratio != null ? fmt2(pnl.sharpe_ratio) : "—";
+  const sortinoDisplay = pnl?.sortino_ratio != null ? fmt2(pnl.sortino_ratio) : "—";
+  const maxDdDisplay = pnl?.max_drawdown_pct != null ? `${pnl.max_drawdown_pct.toFixed(2)}%` : "—";
+  const calmarDisplay = pnl?.calmar_ratio != null ? fmt2(pnl.calmar_ratio) : "—";
+  const pfDisplay = pnl?.profit_factor != null ? fmt2(pnl.profit_factor) : "—";
+
   if (backtestResult) {
     const backtestStartingCapital = backtestResult.summary?.starting_capital ?? 1000;
     const backtestEquityCurve = (() => {
@@ -160,6 +167,16 @@ export default function Reports() {
 
       {pnl && trades.length > 0 && (
         <>
+          <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+            <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Advanced Metrics</h2>
+            <div className="grid grid-cols-5 gap-4">
+              <MetricCard label="Sharpe Ratio" value={sharpeDisplay} />
+              <MetricCard label="Sortino Ratio" value={sortinoDisplay} />
+              <MetricCard label="Max Drawdown" value={maxDdDisplay} valueColor={pnl.max_drawdown_pct > 0 ? "red" : undefined} />
+              <MetricCard label="Calmar Ratio" value={calmarDisplay} />
+              <MetricCard label="Profit Factor" value={pfDisplay} valueColor={pnl.profit_factor != null ? (pnl.profit_factor >= 1 ? "green" : "red") : undefined} />
+            </div>
+          </div>
           <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
             <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Equity Curve</h2>
             <EquityCurveChart points={equityCurve} startingCapital={parseFloat(pnl.starting_capital)} />
