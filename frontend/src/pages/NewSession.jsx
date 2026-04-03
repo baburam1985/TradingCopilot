@@ -4,6 +4,7 @@ import { getStrategies, createSession, createSchedule, runBacktest, runBacktestC
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
 import SchedulePicker from "../components/SchedulePicker";
+import FitnessBadge from "../components/FitnessBadge";
 
 function buildDefaultParams(parameters) {
   return Object.fromEntries(
@@ -119,7 +120,17 @@ export default function NewSession() {
           from_dt: form.from_dt,
           to_dt: form.to_dt,
         });
-        navigate("/reports", { state: { backtestResult: result.data } });
+        navigate("/reports", {
+          state: {
+            backtestResult: result.data,
+            backtestMeta: {
+              symbol: form.symbol,
+              start_date: form.from_dt.split("T")[0],
+              end_date: form.to_dt.split("T")[0],
+              starting_capital: +form.starting_capital,
+            },
+          },
+        });
       } else if (scheduleEnabled) {
         await createSchedule({
           symbol: form.symbol,
@@ -242,6 +253,7 @@ export default function NewSession() {
                   {selectedStrategy?.description && (
                     <p className="text-[#555] text-xs mt-1">{selectedStrategy.description}</p>
                   )}
+                  <FitnessBadge symbol={form.symbol} strategy={form.strategy} />
                 </div>
                 {selectedStrategy && Object.entries(selectedStrategy.parameters).map(([key, spec]) => (
                   <div key={key}>

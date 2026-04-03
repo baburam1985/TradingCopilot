@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { getTrades, getLatestPrice, getIndicators } from "../api/client";
+import { getTrades, getLatestPrice, getIndicators, getRegime, getSessions } from "../api/client";
 import { createSessionSocket } from "../api/client";
 import PriceChart from "../components/PriceChart";
 import TradeLog from "../components/TradeLog";
@@ -15,6 +15,7 @@ export default function LiveDashboard() {
   const [latestPrice, setLatestPrice] = useState(null);
   const [indicators, setIndicators] = useState(null);
   const [activeIndicators, setActiveIndicators] = useState(new Set());
+  const [regime, setRegime] = useState(null);
   const wsRef = useRef(null);
   const { addNotification, hydrate } = useNotifications();
 
@@ -36,7 +37,23 @@ export default function LiveDashboard() {
     // Hydrate notification history from persisted alerts once WS is set up.
     hydrate(sessionId);
 
-    return () => wsRef.current?.close();
+    // Fetch session symbol then poll regime every 5 minutes
+    let regimeInterval = null;
+    getSessions().then((r) => {
+      const session = r.data.find((s) => s.id === sessionId);
+      if (!session?.symbol) return;
+      const fetchRegime = () =>
+        getRegime(session.symbol)
+          .then((res) => setRegime(res.data))
+          .catch(() => {});
+      fetchRegime();
+      regimeInterval = setInterval(fetchRegime, 5 * 60 * 1000);
+    }).catch(() => {});
+
+    return () => {
+      wsRef.current?.close();
+      clearInterval(regimeInterval);
+    };
   }, [sessionId]);
 
   function handleToggleIndicator(key) {
@@ -67,6 +84,29 @@ export default function LiveDashboard() {
         title="Live Dashboard"
         subtitle={sessionId ? `Session ${sessionId}` : "Monitoring active session"}
       />
+      {regime && (
+        <div className="mb-4 flex items-center gap-2">
+          <span
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold"
+            style={{
+              background:
+                regime.regime === "TRENDING_UP" ? "#00e676" :
+                regime.regime === "TRENDING_DOWN" ? "#ff4444" :
+                regime.regime === "SIDEWAYS_HIGH_VOL" ? "#ffb300" : "#888",
+              color: regime.regime === "TRENDING_DOWN" ? "#fff" : "#000",
+            }}
+          >
+            Market:{" "}
+            {{
+              TRENDING_UP: "Trending Up",
+              TRENDING_DOWN: "Trending Down",
+              SIDEWAYS_HIGH_VOL: "Sideways (High Vol)",
+              SIDEWAYS_LOW_VOL: "Sideways (Low Vol)",
+            }[regime.regime] ?? regime.regime}
+          </span>
+          <span className="text-[#555] text-xs">ADX {regime.adx}</span>
+        </div>
+      )}
 
       {/* Metrics row — horizontal scroll on mobile */}
       <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">

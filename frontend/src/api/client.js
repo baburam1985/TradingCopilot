@@ -15,7 +15,12 @@ export const getEquityCurve = (sessionId) => api.get(`/sessions/${sessionId}/equ
 export const runBacktest = (data) => api.post("/backtest", data);
 export const runBacktestCompare = (data) => api.post("/backtest/compare", data);
 export const runOptimize = (data) => api.post("/backtest/optimize", data);
+export const runWalkForward = (data) => api.post("/backtest/walk-forward", data);
+export const getBenchmark = (symbol, startDate, endDate, capital) =>
+  api.get("/backtest/benchmark", { params: { symbol, start_date: startDate, end_date: endDate, capital } });
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
+export const getSymbolEvents = (symbol, from, to) =>
+  api.get(`/symbols/${symbol}/events`, { params: { from, to } });
 
 export const getAlerts = (sessionId, limit = 20) =>
   api.get("/alerts", { params: { session_id: sessionId, limit } });
@@ -64,3 +69,10 @@ export function createWatchlistSocket(onMessage) {
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   return ws;
 }
+
+// ---------------------------------------------------------------------------
+// Analysis API
+// ---------------------------------------------------------------------------
+
+export const getRegime = (symbol) => api.get("/analysis/regime", { params: { symbol } });
+
