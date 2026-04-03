@@ -16,3 +16,9 @@ DATABASE_URL = (
 
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY", "")
+
+# Interactive Brokers (IBKR) connector config
+IBKR_HOST = os.environ.get("IBKR_HOST", "127.0.0.1")
+IBKR_PORT = int(os.environ.get("IBKR_PORT", "7497"))  # 7497=TWS paper, 4001=Gateway
+IBKR_CLIENT_ID = int(os.environ.get("IBKR_CLIENT_ID", "1"))
+IBKR_ACCOUNT = os.environ.get("IBKR_ACCOUNT", "")

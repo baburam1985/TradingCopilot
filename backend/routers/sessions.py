@@ -22,6 +22,7 @@ class CreateSessionRequest(BaseModel):
     strategy_params: dict
     starting_capital: float
     mode: str  # "paper" or "live"
+    broker: Optional[str] = None  # "alpaca" | "ibkr" | None (uses paper executor for "paper" mode)
     # Risk management (all optional)
     stop_loss_pct: Optional[float] = None
     take_profit_pct: Optional[float] = None
