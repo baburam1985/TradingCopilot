@@ -141,17 +141,19 @@ export default function NewSession() {
         subtitle="Configure your strategy and launch a session"
       />
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <MetricCard label="Expected Volatility" value="—" />
-        <MetricCard label="Market Liquidity" value="—" />
-        <MetricCard label="Backtest Win-Rate" value="—" />
+      {/* Metrics row — horizontal scroll on mobile */}
+      <div className="overflow-x-auto mb-8 -mx-6 px-6 sm:mx-0 sm:px-0">
+        <div className="grid grid-cols-3 gap-4 min-w-[420px] sm:min-w-0">
+          <MetricCard label="Expected Volatility" value="—" />
+          <MetricCard label="Market Liquidity" value="—" />
+          <MetricCard label="Backtest Win-Rate" value="—" />
+        </div>
       </div>
 
-      {/* Body: two-column layout */}
-      <div className="flex gap-6">
+      {/* Body: stacked on mobile, two-column on md+ */}
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Left panel — form */}
-        <div className="flex-1 max-w-md">
+        <div className="w-full md:flex-1 md:max-w-md">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Asset Selection */}
             <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
@@ -174,9 +176,10 @@ export default function NewSession() {
                     value={form.mode}
                     onChange={e => setForm({ ...form, mode: e.target.value })}
                   >
-                    <option value="paper">Paper Trading (Real-time)</option>
+                    <option value="paper">Paper Trading (Internal)</option>
+                    <option value="alpaca_paper">Alpaca Paper Trading</option>
+                    <option value="alpaca_live">Alpaca Live Trading</option>
                     <option value="backtest">Backtest (Historical)</option>
-                    <option value="live">Live (Stubbed)</option>
                   </select>
                 </div>
                 <div>
@@ -380,7 +383,7 @@ export default function NewSession() {
         </div>
 
         {/* Right panel — session preview */}
-        <div className="flex-1 bg-[#141414] border border-[#1e1e1e] rounded p-6 flex items-center justify-center">
+        <div className="w-full md:flex-1 bg-[#141414] border border-[#1e1e1e] rounded p-6 flex items-center justify-center min-h-[180px]">
           <div className="text-center text-[#555]">
             <div className="text-4xl mb-3">⏳</div>
             <p className="text-sm">Awaiting session launch</p>

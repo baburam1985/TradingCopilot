@@ -87,6 +87,25 @@ async def test_close_trade_calls_close_position():
 
 
 @pytest.mark.asyncio
+async def test_paper_flag_overrides_env_var():
+    """Explicit paper=False must override ALPACA_PAPER=true in the environment."""
+    with patch.dict("os.environ", {
+        "ALPACA_API_KEY": "test_key",
+        "ALPACA_API_SECRET": "test_secret",
+        "ALPACA_PAPER": "true",
+    }):
+        with patch("executor.alpaca._ALPACA_AVAILABLE", True):
+            with patch("executor.alpaca.TradingClient") as mock_cls:
+                mock_cls.return_value = _make_alpaca_client()
+                AlpacaExecutor(paper=False)
+                mock_cls.assert_called_once_with(
+                    api_key="test_key",
+                    secret_key="test_secret",
+                    paper=False,
+                )
+
+
+@pytest.mark.asyncio
 async def test_executor_created_without_client_reads_env():
     """AlpacaExecutor without injected client should attempt to read env vars."""
     with patch.dict("os.environ", {

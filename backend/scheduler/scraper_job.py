@@ -56,9 +56,14 @@ async def _scrape_symbol(symbol: str):
 
     await _trigger_strategy(symbol, bar.close)
 
+_ALPACA_MODES = ("alpaca_paper", "alpaca_live")
+
+
 async def _trigger_strategy(symbol: str, current_price: float):
     import logging
+    from datetime import datetime, timezone
     from executor.paper import PaperExecutor
+    from executor.alpaca import AlpacaExecutor
     from strategies.registry import STRATEGY_REGISTRY
     from risk.engine import (
         should_stop_loss,
@@ -79,13 +84,16 @@ async def _trigger_strategy(symbol: str, current_price: float):
             select(TradingSession).where(
                 TradingSession.symbol == symbol,
                 TradingSession.status == "active",
-                TradingSession.mode == "paper",
+                TradingSession.mode.in_(["paper", "alpaca_paper", "alpaca_live"]),
             )
         )
         sessions = result.scalars().all()
 
     for session in sessions:
-        executor = PaperExecutor()
+        if session.mode in _ALPACA_MODES:
+            executor = AlpacaExecutor(paper=(session.mode == "alpaca_paper"))
+        else:
+            executor = PaperExecutor()
 
         # --- Risk: close any open trades that hit stop-loss or take-profit ---
         async with AsyncSessionLocal() as db:
@@ -191,7 +199,24 @@ async def _trigger_strategy(symbol: str, current_price: float):
             )
             for open_trade in open_result.scalars().all():
                 await executor.close_trade(open_trade, current_price, db)
-            await executor.execute(session, signal, current_price, db)
+
+            if session.mode in _ALPACA_MODES:
+                order_result = await executor.execute(session, signal, current_price, db)
+                if order_result:
+                    trade = PaperTrade(
+                        session_id=session.id,
+                        action=signal.action,
+                        signal_reason=signal.reason,
+                        price_at_signal=current_price,
+                        quantity=order_result["qty"],
+                        timestamp_open=datetime.now(timezone.utc),
+                        status="open",
+                        alpaca_order_id=order_result["order_id"],
+                    )
+                    db.add(trade)
+                    await db.commit()
+            else:
+                await executor.execute(session, signal, current_price, db)
         logger.info(
             "Session %s: %s at %.4f (%s)",
             session.id,

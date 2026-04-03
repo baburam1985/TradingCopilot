@@ -49,7 +49,7 @@ def _build_order_request(symbol: str, qty: float, side_str: str):
 class AlpacaExecutor(ExecutorBase):
     """Live executor that submits market orders to Alpaca Markets."""
 
-    def __init__(self, trading_client=None):
+    def __init__(self, trading_client=None, paper: bool | None = None):
         if trading_client is not None:
             self._client = trading_client
         else:
@@ -59,7 +59,8 @@ class AlpacaExecutor(ExecutorBase):
                 )
             api_key = os.environ["ALPACA_API_KEY"]
             secret_key = os.environ["ALPACA_API_SECRET"]
-            paper = os.getenv("ALPACA_PAPER", "true").lower() == "true"
+            if paper is None:
+                paper = os.getenv("ALPACA_PAPER", "true").lower() == "true"
             self._client = TradingClient(
                 api_key=api_key,
                 secret_key=secret_key,

@@ -21,3 +21,4 @@ class PaperTrade(Base):
     price_at_close: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
     pnl: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="open")
+    alpaca_order_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

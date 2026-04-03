@@ -311,3 +311,95 @@ async def test_multiple_sessions_all_executed():
         await _trigger_strategy("AAPL", 155.0)
 
     assert mock_executor.execute.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_alpaca_paper_session_uses_alpaca_executor():
+    """A session with mode='alpaca_paper' must use AlpacaExecutor(paper=True)."""
+    session = _make_session()
+    session.mode = "alpaca_paper"
+    bars = [_make_price_bar(150.0)] * 20
+
+    mock_signal = Signal(action="buy", reason="oversold", confidence=0.8)
+    mock_strategy = MagicMock()
+    mock_strategy.analyze.return_value = mock_signal
+    mock_strategy_cls = MagicMock(return_value=mock_strategy)
+
+    sessions_db = _db_ctx([_db_result([session])])
+    risk_check_db = _db_ctx([_db_result([])])
+    history_db = _db_ctx([_db_result(bars)])
+
+    exec_db_inner = AsyncMock()
+    exec_db_inner.execute = AsyncMock(return_value=_db_result([]))
+    exec_db_inner.add = MagicMock()
+
+    @asynccontextmanager
+    async def exec_ctx():
+        yield exec_db_inner
+
+    mock_executor = AsyncMock()
+    mock_executor.execute = AsyncMock(return_value={
+        "order_id": "alpaca-order-456",
+        "symbol": "AAPL",
+        "side": "buy",
+        "qty": 6.666,
+        "status": "accepted",
+        "filled_avg_price": None,
+    })
+    mock_alpaca_cls = MagicMock(return_value=mock_executor)
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+
+    with patch("database.AsyncSessionLocal", new=factory), \
+         patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
+         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls):
+        await _trigger_strategy("AAPL", 150.0)
+
+    mock_alpaca_cls.assert_called_once_with(paper=True)
+    mock_executor.execute.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_alpaca_live_session_uses_alpaca_executor_paper_false():
+    """A session with mode='alpaca_live' must use AlpacaExecutor(paper=False)."""
+    session = _make_session()
+    session.mode = "alpaca_live"
+    bars = [_make_price_bar(200.0)] * 20
+
+    mock_signal = Signal(action="sell", reason="overbought", confidence=0.9)
+    mock_strategy = MagicMock()
+    mock_strategy.analyze.return_value = mock_signal
+    mock_strategy_cls = MagicMock(return_value=mock_strategy)
+
+    sessions_db = _db_ctx([_db_result([session])])
+    risk_check_db = _db_ctx([_db_result([])])
+    history_db = _db_ctx([_db_result(bars)])
+
+    exec_db_inner = AsyncMock()
+    exec_db_inner.execute = AsyncMock(return_value=_db_result([]))
+    exec_db_inner.add = MagicMock()
+
+    @asynccontextmanager
+    async def exec_ctx():
+        yield exec_db_inner
+
+    mock_executor = AsyncMock()
+    mock_executor.execute = AsyncMock(return_value={
+        "order_id": "alpaca-order-789",
+        "symbol": "AAPL",
+        "side": "sell",
+        "qty": 5.0,
+        "status": "accepted",
+        "filled_avg_price": None,
+    })
+    mock_alpaca_cls = MagicMock(return_value=mock_executor)
+
+    factory = _chained_db_factory(sessions_db, risk_check_db, history_db, exec_ctx)
+
+    with patch("database.AsyncSessionLocal", new=factory), \
+         patch.dict("strategies.registry.STRATEGY_REGISTRY", {"rsi": mock_strategy_cls}), \
+         patch("executor.alpaca.AlpacaExecutor", mock_alpaca_cls):
+        await _trigger_strategy("AAPL", 200.0)
+
+    mock_alpaca_cls.assert_called_once_with(paper=False)
+    mock_executor.execute.assert_called_once()
