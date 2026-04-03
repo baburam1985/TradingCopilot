@@ -26,6 +26,10 @@ class CreateSessionRequest(BaseModel):
     notify_email: bool = False
     email_address: Optional[str] = None
 
+class UpdateSessionRequest(BaseModel):
+    notify_email: Optional[bool] = None
+    email_address: Optional[str] = None
+
 @router.post("")
 async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(get_db)):
     session = TradingSession(
@@ -59,6 +63,19 @@ async def get_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     session = await db.get(TradingSession, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+@router.patch("/{session_id}")
+async def update_session(session_id: uuid.UUID, req: UpdateSessionRequest, db: AsyncSession = Depends(get_db)):
+    session = await db.get(TradingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if req.notify_email is not None:
+        session.notify_email = req.notify_email
+    if req.email_address is not None:
+        session.email_address = req.email_address
+    await db.commit()
+    await db.refresh(session)
     return session
 
 @router.patch("/{session_id}/stop")

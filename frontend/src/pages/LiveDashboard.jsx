@@ -14,7 +14,7 @@ export default function LiveDashboard() {
   const [trades, setTrades] = useState([]);
   const [latestPrice, setLatestPrice] = useState(null);
   const wsRef = useRef(null);
-  const { addNotification } = useNotifications();
+  const { addNotification, hydrate } = useNotifications();
 
   useEffect(() => {
     getTrades(sessionId).then(r => setTrades(r.data));
@@ -28,6 +28,9 @@ export default function LiveDashboard() {
         addNotification(msg);
       }
     });
+
+    // Hydrate notification history from persisted alerts once WS is set up.
+    hydrate(sessionId);
 
     return () => wsRef.current?.close();
   }, [sessionId]);

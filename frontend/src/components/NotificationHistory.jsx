@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useNotifications } from "../context/NotificationContext";
 
 const LEVEL_DOT = {
@@ -7,7 +9,17 @@ const LEVEL_DOT = {
 };
 
 export default function NotificationHistory({ open, onClose }) {
-  const { notifications, dismissNotification } = useNotifications();
+  const { notifications, dismissNotification, markAllRead } = useNotifications();
+  // Best-effort: grab sessionId from URL if on a dashboard route.
+  const params = useParams();
+  const sessionId = params.sessionId ?? null;
+
+  // Clear unread badge when panel opens.
+  useEffect(() => {
+    if (open && sessionId) {
+      markAllRead(sessionId);
+    }
+  }, [open]);
 
   if (!open) return null;
 

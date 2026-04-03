@@ -17,6 +17,13 @@ export const runBacktestCompare = (data) => api.post("/backtest/compare", data);
 export const runOptimize = (data) => api.post("/backtest/optimize", data);
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
 
+export const getAlerts = (sessionId, limit = 20) =>
+  api.get("/alerts", { params: { session_id: sessionId, limit } });
+export const markAlertRead = (eventId) => api.patch(`/alerts/${eventId}/read`);
+export const markAllAlertsRead = (sessionId) =>
+  api.post("/alerts/mark-all-read", null, { params: { session_id: sessionId } });
+export const updateSession = (id, data) => api.patch(`/sessions/${id}`, data);
+
 export function createSessionSocket(sessionId, onMessage) {
   const ws = new WebSocket(`ws://${window.location.host}/ws/sessions/${sessionId}`);
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));

@@ -9,14 +9,14 @@ const NAV_ITEMS = [
   { label: "Dashboard", to: "/dashboard" },
   { label: "Reports", to: "/reports" },
   { label: "Optimize", to: "/optimize" },
+  { label: "Alerts", to: "/alerts" },
 ];
 
 export default function AppShell({ children }) {
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const { notifications } = useNotifications();
-  const unreadCount = notifications.length;
+  const { unreadCount } = useNotifications();
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a] text-white">
