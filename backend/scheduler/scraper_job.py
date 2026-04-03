@@ -57,12 +57,15 @@ async def _scrape_symbol(symbol: str):
     await _trigger_strategy(symbol, bar.close)
 
 async def _trigger_strategy(symbol: str, current_price: float):
+    import logging
     from executor.paper import PaperExecutor
-    from strategies.moving_average_crossover import MovingAverageCrossover
+    from strategies.registry import STRATEGY_REGISTRY
     from database import AsyncSessionLocal
     from models.trading_session import TradingSession
     from models.price_history import PriceHistory
     from sqlalchemy import select
+
+    logger = logging.getLogger(__name__)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -75,15 +78,26 @@ async def _trigger_strategy(symbol: str, current_price: float):
         sessions = result.scalars().all()
 
     for session in sessions:
-        strategy = MovingAverageCrossover(**session.strategy_params)
+        strategy_cls = STRATEGY_REGISTRY.get(session.strategy)
+        if strategy_cls is None:
+            logger.warning(
+                "Unknown strategy '%s' for session %s — skipping",
+                session.strategy,
+                session.id,
+            )
+            continue
+
+        strategy = strategy_cls(**session.strategy_params)
+
         async with AsyncSessionLocal() as db:
             ph_result = await db.execute(
                 select(PriceHistory)
                 .where(PriceHistory.symbol == symbol)
                 .order_by(PriceHistory.timestamp.desc())
-                .limit(strategy.long_window + 1)
+                .limit(500)
             )
             bars = ph_result.scalars().all()
+
         closes = [float(b.close) for b in reversed(bars)]
         signal = strategy.analyze(closes)
         if signal.action != "hold":
