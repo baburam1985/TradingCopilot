@@ -17,6 +17,9 @@ export const getEquityCurve = (sessionId) => api.get(`/sessions/${sessionId}/equ
 export const runBacktest = (data) => api.post("/backtest", data);
 export const runBacktestCompare = (data) => api.post("/backtest/compare", data);
 export const runOptimize = (data) => api.post("/backtest/optimize", data);
+export const runWalkForward = (data) => api.post("/backtest/walk-forward", data);
+export const getBenchmark = (symbol, startDate, endDate, capital) =>
+  api.get("/backtest/benchmark", { params: { symbol, start_date: startDate, end_date: endDate, capital } });
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
 export const getSparkline = (symbol) => api.get(`/symbols/${symbol}/sparkline`);
 
