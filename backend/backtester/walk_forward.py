@@ -8,6 +8,7 @@ date, not bar count.
 import itertools
 import math
 import statistics
+from collections import defaultdict
 from datetime import timedelta
 
 from backtester.runner import BacktestRunner
@@ -84,7 +85,6 @@ class WalkForwardEngine:
 
     def _build_windows(self, bars: list) -> list[dict]:
         """Slice bars into rolling windows and run each one."""
-        from datetime import timezone
 
         def _as_date(ts):
             """Normalise timestamp → date regardless of type."""
@@ -97,7 +97,6 @@ class WalkForwardEngine:
         last_date = _as_date(bars[-1].timestamp)
 
         # Build a date→bars index for O(1) slicing by date range
-        from collections import defaultdict
         date_to_bars: dict = defaultdict(list)
         for b in bars:
             date_to_bars[_as_date(b.timestamp)].append(b)
@@ -114,8 +113,11 @@ class WalkForwardEngine:
             test_start = train_end
             test_end = test_start + timedelta(days=self.test_window_days)
 
-            # Stop if test window exceeds available data
-            if test_end > last_date + timedelta(days=1):
+            # test_end is the exclusive upper bound of the test slice (half-open interval).
+            # Stop when test_end exceeds last_date: the test window would extend past
+            # available data. Use strict > (not > last_date+1) to avoid a spurious
+            # extra iteration whose test_bars list would be empty.
+            if test_end > last_date:
                 break
 
             train_bars = [b for d in all_dates if train_start <= d < train_end for b in date_to_bars[d]]
@@ -173,8 +175,10 @@ class WalkForwardEngine:
                 continue
 
             s = summary["sharpe_ratio"]
-            # Prefer combo with higher sharpe; treat None as -inf
-            if best_sharpe is None or (s is not None and s > (best_sharpe or -math.inf)):
+            # Prefer combo with higher sharpe; treat None as -inf.
+            # Use explicit None check — 0.0 is a valid Sharpe and must not be
+            # coerced to False by `best_sharpe or -math.inf`.
+            if best_sharpe is None or (s is not None and s > (best_sharpe if best_sharpe is not None else -math.inf)):
                 best_sharpe = s
                 best_params = params
                 best_combo_summary = summary

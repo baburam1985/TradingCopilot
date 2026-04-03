@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field
-from typing import Optional
 from database import get_db
 from models.price_history import PriceHistory
 from strategies.registry import STRATEGY_REGISTRY
@@ -260,8 +259,11 @@ async def run_walk_forward(req: WalkForwardRequest, db: AsyncSession = Depends(g
             detail=f"Unknown strategy: '{req.strategy}'. Available: {list(STRATEGY_REGISTRY.keys())}",
         )
 
-    from_dt = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
-    to_dt = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+    try:
+        from_dt = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
+        to_dt = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     result = await db.execute(
         select(PriceHistory)
