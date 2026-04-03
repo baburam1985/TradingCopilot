@@ -23,6 +23,13 @@ export const markAlertRead = (eventId) => api.patch(`/alerts/${eventId}/read`);
 export const markAllAlertsRead = (sessionId) =>
   api.post("/alerts/mark-all-read", null, { params: { session_id: sessionId } });
 export const updateSession = (id, data) => api.patch(`/sessions/${id}`, data);
+export const getIndicators = (sessionId) => api.get(`/sessions/${sessionId}/indicators`);
+
+export const getNotes = (tradeId) => api.get(`/trades/${tradeId}/notes`);
+export const createNote = (tradeId, body, tags) => api.post(`/trades/${tradeId}/notes`, { body, tags });
+export const deleteNote = (tradeId, noteId) => api.delete(`/trades/${tradeId}/notes/${noteId}`);
+export const exportJournal = (sessionId) =>
+  api.get(`/sessions/${sessionId}/journal?format=csv`, { responseType: "blob" });
 
 export function createSessionSocket(sessionId, onMessage) {
   const ws = new WebSocket(`ws://${window.location.host}/ws/sessions/${sessionId}`);

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { getTrades, getLatestPrice } from "../api/client";
+import { getTrades, getLatestPrice, getIndicators } from "../api/client";
 import { createSessionSocket } from "../api/client";
 import PriceChart from "../components/PriceChart";
 import TradeLog from "../components/TradeLog";
@@ -13,17 +13,21 @@ export default function LiveDashboard() {
   const [bars, setBars] = useState([]);
   const [trades, setTrades] = useState([]);
   const [latestPrice, setLatestPrice] = useState(null);
+  const [indicators, setIndicators] = useState(null);
+  const [activeIndicators, setActiveIndicators] = useState(new Set());
   const wsRef = useRef(null);
   const { addNotification, hydrate } = useNotifications();
 
   useEffect(() => {
     getTrades(sessionId).then(r => setTrades(r.data));
+    getIndicators(sessionId).then(r => setIndicators(r.data)).catch(() => {});
 
     wsRef.current = createSessionSocket(sessionId, (msg) => {
       if (msg.type === "price_update") {
         setLatestPrice(msg.close);
         setBars(prev => [...prev.slice(-199), { timestamp: msg.timestamp, close: msg.close }]);
         getTrades(sessionId).then(r => setTrades(r.data));
+        getIndicators(sessionId).then(r => setIndicators(r.data)).catch(() => {});
       } else if (msg.type === "notification") {
         addNotification(msg);
       }
@@ -34,6 +38,15 @@ export default function LiveDashboard() {
 
     return () => wsRef.current?.close();
   }, [sessionId]);
+
+  function handleToggleIndicator(key) {
+    setActiveIndicators(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const openTrade = trades.find(t => t.status === "open");
   const unrealizedPnl = openTrade && latestPrice
@@ -75,7 +88,13 @@ export default function LiveDashboard() {
 
       {/* Charts */}
       <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
-        <PriceChart bars={bars} trades={trades} />
+        <PriceChart
+          bars={bars}
+          trades={trades}
+          indicators={indicators}
+          activeIndicators={activeIndicators}
+          onToggleIndicator={handleToggleIndicator}
+        />
       </div>
 
       {/* Trade Log */}
