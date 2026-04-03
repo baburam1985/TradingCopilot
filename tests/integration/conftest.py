@@ -42,7 +42,7 @@ async def clean_db(db_session):
     # Rollback any aborted transaction before truncating
     await db_session.rollback()
     await db_session.execute(
-        text("TRUNCATE TABLE paper_trades, aggregated_pnl, sessions, price_history RESTART IDENTITY CASCADE")
+        text("TRUNCATE TABLE paper_trades, aggregated_pnl, sessions, price_history, watchlist_items RESTART IDENTITY CASCADE")
     )
     await db_session.commit()
 
