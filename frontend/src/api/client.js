@@ -31,8 +31,36 @@ export const deleteNote = (tradeId, noteId) => api.delete(`/trades/${tradeId}/no
 export const exportJournal = (sessionId) =>
   api.get(`/sessions/${sessionId}/journal?format=csv`, { responseType: "blob" });
 
+export const getSchedules = () => api.get("/sessions/schedules");
+export const createSchedule = (data) => api.post("/sessions/schedules", data);
+export const getSchedule = (id) => api.get(`/sessions/schedules/${id}`);
+export const updateSchedule = (id, data) => api.patch(`/sessions/schedules/${id}`, data);
+export const deleteSchedule = (id) => api.delete(`/sessions/schedules/${id}`);
+
 export function createSessionSocket(sessionId, onMessage) {
   const ws = new WebSocket(`ws://${window.location.host}/ws/sessions/${sessionId}`);
+  ws.onmessage = (e) => onMessage(JSON.parse(e.data));
+  return ws;
+}
+
+// ---------------------------------------------------------------------------
+// Watchlist API
+// ---------------------------------------------------------------------------
+
+export const getWatchlist = () => api.get("/watchlist");
+
+export const createWatchlistItem = (data) => api.post("/watchlist", data);
+
+export const updateWatchlistItem = (id, data) => api.patch(`/watchlist/${id}`, data);
+
+export const deleteWatchlistItem = (id) => api.delete(`/watchlist/${id}`);
+
+// ---------------------------------------------------------------------------
+// Watchlist WebSocket
+// ---------------------------------------------------------------------------
+
+export function createWatchlistSocket(onMessage) {
+  const ws = new WebSocket(`ws://${window.location.host}/ws/watchlist`);
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   return ws;
 }
