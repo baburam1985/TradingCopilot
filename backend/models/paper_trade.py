@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Numeric, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -22,3 +22,4 @@ class PaperTrade(Base):
     pnl: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="open")
     alpaca_order_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reasoning: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

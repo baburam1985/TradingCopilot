@@ -15,6 +15,7 @@ class PaperExecutor(ExecutorBase):
             quantity=quantity,
             timestamp_open=datetime.now(timezone.utc),
             status="open",
+            reasoning=signal.reasoning,
         )
         if db:
             db.add(trade)

@@ -34,11 +34,33 @@ class MovingAverageCrossover(StrategyBase):
                 action="buy",
                 reason=f"Golden cross: {self.short_window}MA ({short_ma_now:.2f}) crossed above {self.long_window}MA ({long_ma_now:.2f})",
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "MA Crossover",
+                    "indicator_value": round(short_ma_now, 2),
+                    "threshold": round(long_ma_now, 2),
+                    "supporting_factors": [
+                        f"{self.short_window}-bar MA={round(short_ma_now, 2)}",
+                        f"{self.long_window}-bar MA={round(long_ma_now, 2)}",
+                    ],
+                    "market_context": f"Golden cross: {self.short_window}-bar MA crossed above {self.long_window}-bar MA",
+                },
             )
         if crossed_below:
             return Signal(
                 action="sell",
                 reason=f"Death cross: {self.short_window}MA ({short_ma_now:.2f}) crossed below {self.long_window}MA ({long_ma_now:.2f})",
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "MA Crossover",
+                    "indicator_value": round(short_ma_now, 2),
+                    "threshold": round(long_ma_now, 2),
+                    "supporting_factors": [
+                        f"{self.short_window}-bar MA={round(short_ma_now, 2)}",
+                        f"{self.long_window}-bar MA={round(long_ma_now, 2)}",
+                    ],
+                    "market_context": f"Death cross: {self.short_window}-bar MA crossed below {self.long_window}-bar MA",
+                },
             )
         return Signal(action="hold", reason="No crossover detected", confidence=0.0)

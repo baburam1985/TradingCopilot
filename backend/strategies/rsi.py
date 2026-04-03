@@ -61,12 +61,28 @@ class RSIStrategy(StrategyBase):
                     action="buy",
                     reason=f"RSI({self.period})={rsi_now:.1f} below oversold threshold {self.oversold}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "buy",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.oversold,
+                        "supporting_factors": [],
+                        "market_context": f"RSI below oversold threshold {self.oversold}",
+                    },
                 )
             if rsi_now > self.overbought:
                 return Signal(
                     action="sell",
                     reason=f"RSI({self.period})={rsi_now:.1f} above overbought threshold {self.overbought}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "sell",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.overbought,
+                        "supporting_factors": [],
+                        "market_context": f"RSI above overbought threshold {self.overbought}",
+                    },
                 )
             return Signal(
                 action="hold",
@@ -86,6 +102,14 @@ class RSIStrategy(StrategyBase):
                     action="buy",
                     reason=f"RSI({self.period}) crossed below oversold: {rsi_prev:.1f} → {rsi_now:.1f}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "buy",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.oversold,
+                        "supporting_factors": [],
+                        "market_context": f"RSI crossed below oversold threshold {self.oversold}",
+                    },
                 )
             # Both at extreme: signal buy only if this is NOT sustained (i.e., not many bars of data yet)
             if len(closes) <= 60:  # Arbitrary threshold: if we don't have too much data, treat as recent entry
@@ -93,6 +117,14 @@ class RSIStrategy(StrategyBase):
                     action="buy",
                     reason=f"RSI({self.period})={rsi_now:.1f} below oversold threshold {self.oversold}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "buy",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.oversold,
+                        "supporting_factors": [],
+                        "market_context": f"RSI in oversold territory",
+                    },
                 )
             else:
                 # Many bars at extreme = sustained position, don't signal
@@ -110,6 +142,14 @@ class RSIStrategy(StrategyBase):
                     action="sell",
                     reason=f"RSI({self.period}) crossed above overbought: {rsi_prev:.1f} → {rsi_now:.1f}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "sell",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.overbought,
+                        "supporting_factors": [],
+                        "market_context": f"RSI crossed above overbought threshold {self.overbought}",
+                    },
                 )
             # Both at extreme: signal sell only if this is NOT sustained
             if len(closes) <= 60:
@@ -117,6 +157,14 @@ class RSIStrategy(StrategyBase):
                     action="sell",
                     reason=f"RSI({self.period})={rsi_now:.1f} above overbought threshold {self.overbought}",
                     confidence=0.75,
+                    reasoning={
+                        "signal_type": "sell",
+                        "primary_indicator": f"RSI({self.period})",
+                        "indicator_value": round(rsi_now, 2),
+                        "threshold": self.overbought,
+                        "supporting_factors": [],
+                        "market_context": f"RSI in overbought territory",
+                    },
                 )
             else:
                 # Many bars at extreme = sustained position, don't signal

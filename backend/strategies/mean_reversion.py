@@ -67,12 +67,28 @@ class MeanReversionStrategy(StrategyBase):
                 action="buy",
                 reason=f"Z-score ({z:.2f}) below -{self.entry_zscore:.1f} — price far below mean",
                 confidence=min(abs(z) / (self.entry_zscore * 2), 1.0),
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "Mean Reversion",
+                    "indicator_value": round(z, 2),
+                    "threshold": -self.entry_zscore,
+                    "supporting_factors": [],
+                    "market_context": f"Z-score ({round(z, 2)}) below -{self.entry_zscore} — price significantly below mean",
+                },
             )
         if z >= self.entry_zscore:
             return Signal(
                 action="sell",
                 reason=f"Z-score ({z:.2f}) above +{self.entry_zscore:.1f} — price far above mean",
                 confidence=min(abs(z) / (self.entry_zscore * 2), 1.0),
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "Mean Reversion",
+                    "indicator_value": round(z, 2),
+                    "threshold": self.entry_zscore,
+                    "supporting_factors": [],
+                    "market_context": f"Z-score ({round(z, 2)}) above +{self.entry_zscore} — price significantly above mean",
+                },
             )
         return Signal(
             action="hold",

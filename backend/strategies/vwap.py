@@ -53,12 +53,28 @@ class VWAPStrategy(StrategyBase):
                 action="buy",
                 reason=f"Price ({price:.2f}) below VWAP ({vwap:.2f})",
                 confidence=0.65,
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "VWAP",
+                    "indicator_value": round(vwap, 2),
+                    "threshold": round(vwap, 2),
+                    "supporting_factors": [f"current price={round(price, 2)}"],
+                    "market_context": f"Price ({round(price, 2)}) is below VWAP ({round(vwap, 2)})",
+                },
             )
         if price > vwap:
             return Signal(
                 action="sell",
                 reason=f"Price ({price:.2f}) above VWAP ({vwap:.2f})",
                 confidence=0.65,
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "VWAP",
+                    "indicator_value": round(vwap, 2),
+                    "threshold": round(vwap, 2),
+                    "supporting_factors": [f"current price={round(price, 2)}"],
+                    "market_context": f"Price ({round(price, 2)}) is above VWAP ({round(vwap, 2)})",
+                },
             )
         return Signal(
             action="hold",

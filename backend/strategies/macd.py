@@ -104,6 +104,14 @@ class MACDStrategy(StrategyBase):
                     f"signal({signal_now:.4f})"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "MACD",
+                    "indicator_value": round(macd_now, 4),
+                    "threshold": round(signal_now, 4),
+                    "supporting_factors": [f"signal line={round(signal_now, 4)}"],
+                    "market_context": "MACD line crossed above signal line (bullish crossover)",
+                },
             )
         if crossed_below:
             return Signal(
@@ -113,6 +121,14 @@ class MACDStrategy(StrategyBase):
                     f"signal({signal_now:.4f})"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "MACD",
+                    "indicator_value": round(macd_now, 4),
+                    "threshold": round(signal_now, 4),
+                    "supporting_factors": [f"signal line={round(signal_now, 4)}"],
+                    "market_context": "MACD line crossed below signal line (bearish crossover)",
+                },
             )
 
         return Signal(

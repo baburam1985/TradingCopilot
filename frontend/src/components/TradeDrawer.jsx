@@ -120,6 +120,14 @@ export default function TradeDrawer({ trade, isOpen, onClose }) {
             <div className="text-[#555] text-xs uppercase">Status</div>
             <div className="text-[#e0e0e0]">{trade.status}</div>
           </div>
+          {(trade.reasoning_text || trade.signal_reason) && (
+            <div className="col-span-2">
+              <div className="text-[#555] text-xs uppercase mb-1">Reasoning</div>
+              <div className="text-[#b0b0b0] text-xs leading-relaxed">
+                {trade.reasoning_text || trade.signal_reason}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Notes list */}

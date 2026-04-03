@@ -70,6 +70,14 @@ class BollingerBandsStrategy(StrategyBase):
                     f"mean={middle:.2f}"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "Bollinger Bands",
+                    "indicator_value": round(price, 2),
+                    "threshold": round(lower, 2),
+                    "supporting_factors": [f"middle band={round(middle, 2)}"],
+                    "market_context": f"Price touched/crossed below lower Bollinger Band ({round(lower, 2)})",
+                },
             )
         if price >= upper:
             return Signal(
@@ -79,6 +87,14 @@ class BollingerBandsStrategy(StrategyBase):
                     f"mean={middle:.2f}"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "Bollinger Bands",
+                    "indicator_value": round(price, 2),
+                    "threshold": round(upper, 2),
+                    "supporting_factors": [f"middle band={round(middle, 2)}"],
+                    "market_context": f"Price touched/crossed above upper Bollinger Band ({round(upper, 2)})",
+                },
             )
 
         return Signal(

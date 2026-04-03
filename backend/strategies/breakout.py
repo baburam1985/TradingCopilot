@@ -42,6 +42,14 @@ class BreakoutStrategy(StrategyBase):
                     f"Breakout: price ({price:.2f}) above {self.period}-bar high ({channel_high:.2f})"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "buy",
+                    "primary_indicator": "Breakout",
+                    "indicator_value": round(price, 2),
+                    "threshold": round(channel_high, 2),
+                    "supporting_factors": [f"{self.period}-bar channel low={round(channel_low, 2)}"],
+                    "market_context": f"Price broke above {self.period}-bar resistance level ({round(channel_high, 2)})",
+                },
             )
         if price < channel_low:
             return Signal(
@@ -50,6 +58,14 @@ class BreakoutStrategy(StrategyBase):
                     f"Breakdown: price ({price:.2f}) below {self.period}-bar low ({channel_low:.2f})"
                 ),
                 confidence=0.7,
+                reasoning={
+                    "signal_type": "sell",
+                    "primary_indicator": "Breakout",
+                    "indicator_value": round(price, 2),
+                    "threshold": round(channel_low, 2),
+                    "supporting_factors": [f"{self.period}-bar channel high={round(channel_high, 2)}"],
+                    "market_context": f"Price broke below {self.period}-bar support level ({round(channel_low, 2)})",
+                },
             )
         return Signal(
             action="hold",

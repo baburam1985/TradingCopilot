@@ -81,6 +81,8 @@ def _make_mock_trade(session_id=None, action="buy", status="closed", pnl=10.0):
     t.signal_reason = "oversold"
     t.timestamp_open = datetime.now(timezone.utc) - timedelta(hours=2)
     t.timestamp_close = datetime.now(timezone.utc) - timedelta(hours=1)
+    t.alpaca_order_id = None
+    t.reasoning = None
     return t
 
 
