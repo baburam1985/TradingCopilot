@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getStrategies, createSession, createSchedule, runBacktest, runBacktestCompare } from "../api/client";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
@@ -19,6 +19,8 @@ function coerceParam(value, type) {
 
 export default function NewSession() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const replayData = location.state?.replay ?? null;
   const [strategies, setStrategies] = useState([]);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [strategyParamValues, setStrategyParamValues] = useState({});
@@ -53,13 +55,22 @@ export default function NewSession() {
     getStrategies().then((r) => {
       const list = r.data;
       setStrategies(list);
-      const initial = list.find(s => s.name === form.strategy) || list[0];
+      const strategyName = replayData?.strategy ?? form.strategy;
+      const initial = list.find(s => s.name === strategyName) || list[0];
       if (initial) {
         setSelectedStrategy(initial);
         setStrategyParamValues(buildDefaultParams(initial.parameters));
       }
+      if (replayData) {
+        setForm((prev) => ({
+          ...prev,
+          symbol: replayData.symbol ?? prev.symbol,
+          strategy: replayData.strategy ?? prev.strategy,
+          starting_capital: replayData.starting_capital ?? prev.starting_capital,
+        }));
+      }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStrategyChange = (e) => {
     const name = e.target.value;

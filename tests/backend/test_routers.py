@@ -260,6 +260,116 @@ class TestSessionsRouter:
         finally:
             app.dependency_overrides.clear()
 
+    @pytest.mark.asyncio
+    async def test_list_sessions_filters_by_strategy(self):
+        db = _make_mock_db()
+        sessions = [_make_mock_session(strategy="rsi")]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sessions
+        db.execute = AsyncMock(return_value=mock_result)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get("/sessions?strategy=rsi")
+            assert resp.status_code == 200
+            db.execute.assert_awaited_once()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_filters_by_symbol(self):
+        db = _make_mock_db()
+        sessions = [_make_mock_session(symbol="TSLA")]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sessions
+        db.execute = AsyncMock(return_value=mock_result)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get("/sessions?symbol=TSLA")
+            assert resp.status_code == 200
+            db.execute.assert_awaited_once()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_filters_by_status(self):
+        db = _make_mock_db()
+        sessions = [_make_mock_session(status="closed")]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sessions
+        db.execute = AsyncMock(return_value=mock_result)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get("/sessions?status=closed")
+            assert resp.status_code == 200
+            db.execute.assert_awaited_once()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_filters_by_date_range(self):
+        db = _make_mock_db()
+        sessions = [_make_mock_session()]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sessions
+        db.execute = AsyncMock(return_value=mock_result)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get("/sessions?from_date=2024-01-01&to_date=2024-12-31")
+            assert resp.status_code == 200
+            db.execute.assert_awaited_once()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_get_session_summary_returns_metrics(self):
+        db = _make_mock_db()
+        session = _make_mock_session(starting_capital=1000.0)
+        session.closed_at = datetime.now(timezone.utc)
+        db.get = AsyncMock(return_value=session)
+
+        trade1 = _make_mock_trade(session_id=session.id, action="buy", status="closed", pnl=25.0)
+        trade2 = _make_mock_trade(session_id=session.id, action="buy", status="closed", pnl=-10.0)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [trade1, trade2]
+        db.execute = AsyncMock(return_value=mock_result)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(f"/sessions/{session.id}/summary")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["num_trades"] == 2
+            assert data["num_wins"] == 1
+            assert data["symbol"] == "AAPL"
+            assert data["strategy"] == "rsi"
+            assert "duration_seconds" in data
+            assert "win_rate" in data
+            assert "total_pnl" in data
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_get_session_summary_returns_404_when_not_found(self):
+        db = _make_mock_db()
+        db.get = AsyncMock(return_value=None)
+
+        app.dependency_overrides[get_db] = _override_get_db(db)
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(f"/sessions/{uuid.uuid4()}/summary")
+            assert resp.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
 
 # ---------------------------------------------------------------------------
 # Trades router

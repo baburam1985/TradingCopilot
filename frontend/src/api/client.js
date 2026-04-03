@@ -5,7 +5,8 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-export const getSessions = () => api.get("/sessions");
+export const getSessions = (filters = {}) => api.get("/sessions", { params: filters });
+export const getSessionSummary = (sessionId) => api.get(`/sessions/${sessionId}/summary`);
 export const createSession = (data) => api.post("/sessions", data);
 export const stopSession = (id) => api.patch(`/sessions/${id}/stop`);
 export const getStrategies = () => api.get("/strategies");

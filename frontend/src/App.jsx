@@ -9,6 +9,7 @@ import AlertPreferences from "./pages/AlertPreferences";
 import Watchlist from "./pages/Watchlist";
 import ScheduledSessions from "./pages/ScheduledSessions";
 import Onboarding from "./pages/Onboarding";
+import SessionHistory from "./pages/SessionHistory";
 import { NotificationProvider } from "./context/NotificationContext";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertPreferences />} />
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/schedules" element={<ScheduledSessions />} />
+          <Route path="/history" element={<SessionHistory />} />
         </Routes>
         {showOnboarding && <Onboarding onDismiss={() => setShowOnboarding(false)} />}
       </AppShell>
