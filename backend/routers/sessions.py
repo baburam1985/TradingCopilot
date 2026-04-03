@@ -11,6 +11,7 @@ from database import get_db
 from models.trading_session import TradingSession
 from models.paper_trade import PaperTrade
 from models.trade_note import TradeNote
+from models.close_summary import CloseSummary
 from scheduler.scraper_job import register_symbol, unregister_symbol
 from journal import build_journal_csv
 from pnl.aggregator import compute_period_summary
@@ -165,6 +166,36 @@ async def stop_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     await db.commit()
     unregister_symbol(session.symbol)
     return session
+
+
+@router.get("/{session_id}/close-summary")
+async def get_close_summary(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    session = await db.get(TradingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = await db.execute(
+        select(CloseSummary)
+        .where(CloseSummary.session_id == session_id)
+        .order_by(CloseSummary.generated_at.desc())
+        .limit(1)
+    )
+    summary = result.scalars().first()
+    if not summary:
+        raise HTTPException(status_code=404, detail="No close summary available for this session yet")
+
+    return {
+        "id": str(summary.id),
+        "session_id": str(summary.session_id),
+        "generated_at": summary.generated_at.isoformat(),
+        "trading_date": summary.trading_date,
+        "total_pnl": float(summary.total_pnl),
+        "trade_count": summary.trade_count,
+        "win_rate": float(summary.win_rate),
+        "max_drawdown_pct": float(summary.max_drawdown_pct),
+        "pattern_analysis": summary.pattern_analysis or [],
+        "tomorrow_preview": summary.tomorrow_preview or [],
+    }
 
 
 @router.get("/{session_id}/journal")

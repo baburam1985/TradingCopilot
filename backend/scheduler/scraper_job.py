@@ -388,10 +388,27 @@ async def _trigger_watchlist_signals(symbol: str, current_price: float):
                     logger.warning("Watchlist threshold email delivery failed: %s", exc)
 
 
+async def _run_close_summaries():
+    """Scheduled at 4:15 PM ET on trading days — generate evening close summaries."""
+    from close_summary.generator import generate_close_summaries
+    await generate_close_summaries()
+
+
 def start_scheduler():
+    import zoneinfo
     from scheduler.schedule_job import _schedule_poller
+
+    ET = zoneinfo.ZoneInfo("America/New_York")
     scheduler.add_job(_scrape_all, "interval", minutes=1, id="scrape_all")
     scheduler.add_job(_schedule_poller, "interval", minutes=1, id="schedule_poller")
+    scheduler.add_job(
+        _run_close_summaries,
+        "cron",
+        hour=16,
+        minute=15,
+        timezone=ET,
+        id="close_summaries",
+    )
     scheduler.start()
 
 def stop_scheduler():
