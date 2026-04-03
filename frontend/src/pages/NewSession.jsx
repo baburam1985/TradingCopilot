@@ -4,14 +4,26 @@ import { getStrategies, createSession, runBacktest } from "../api/client";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
 
+function buildDefaultParams(parameters) {
+  return Object.fromEntries(
+    Object.entries(parameters).map(([key, spec]) => [key, spec.default])
+  );
+}
+
+function coerceParam(value, type) {
+  if (type === "int") return parseInt(value, 10);
+  if (type === "float") return parseFloat(value);
+  return value;
+}
+
 export default function NewSession() {
   const navigate = useNavigate();
   const [strategies, setStrategies] = useState([]);
+  const [selectedStrategy, setSelectedStrategy] = useState(null);
+  const [strategyParamValues, setStrategyParamValues] = useState({});
   const [form, setForm] = useState({
     symbol: "",
     strategy: "moving_average_crossover",
-    short_window: 50,
-    long_window: 200,
     starting_capital: 1000,
     mode: "paper",
     from_dt: "",
@@ -21,19 +33,46 @@ export default function NewSession() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    getStrategies().then((r) => setStrategies(r.data));
+    getStrategies().then((r) => {
+      const list = r.data;
+      setStrategies(list);
+      const initial = list.find(s => s.name === form.strategy) || list[0];
+      if (initial) {
+        setSelectedStrategy(initial);
+        setStrategyParamValues(buildDefaultParams(initial.parameters));
+      }
+    });
   }, []);
+
+  const handleStrategyChange = (e) => {
+    const name = e.target.value;
+    const strat = strategies.find(s => s.name === name);
+    setForm({ ...form, strategy: name });
+    setSelectedStrategy(strat || null);
+    setStrategyParamValues(strat ? buildDefaultParams(strat.parameters) : {});
+  };
+
+  const buildStrategyParams = () => {
+    if (!selectedStrategy) return {};
+    return Object.fromEntries(
+      Object.entries(strategyParamValues).map(([key, val]) => [
+        key,
+        coerceParam(val, selectedStrategy.parameters[key]?.type),
+      ])
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const strategy_params = buildStrategyParams();
     try {
       if (form.mode === "backtest") {
         const result = await runBacktest({
           symbol: form.symbol,
           strategy: form.strategy,
-          strategy_params: { short_window: +form.short_window, long_window: +form.long_window },
+          strategy_params,
           starting_capital: +form.starting_capital,
           from_dt: form.from_dt,
           to_dt: form.to_dt,
@@ -43,7 +82,7 @@ export default function NewSession() {
         const session = await createSession({
           symbol: form.symbol,
           strategy: form.strategy,
-          strategy_params: { short_window: +form.short_window, long_window: +form.long_window },
+          strategy_params,
           starting_capital: +form.starting_capital,
           mode: form.mode,
         });
@@ -126,31 +165,32 @@ export default function NewSession() {
                   <select
                     className={inputClass}
                     value={form.strategy}
-                    onChange={e => setForm({ ...form, strategy: e.target.value })}
+                    onChange={handleStrategyChange}
                   >
                     {strategies.map(s => (
                       <option key={s.name} value={s.name}>{s.name}</option>
                     ))}
                   </select>
+                  {selectedStrategy?.description && (
+                    <p className="text-[#555] text-xs mt-1">{selectedStrategy.description}</p>
+                  )}
                 </div>
-                <div>
-                  <label className={labelClass}>Short Window</label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    value={form.short_window}
-                    onChange={e => setForm({ ...form, short_window: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Long Window</label>
-                  <input
-                    type="number"
-                    className={inputClass}
-                    value={form.long_window}
-                    onChange={e => setForm({ ...form, long_window: e.target.value })}
-                  />
-                </div>
+                {selectedStrategy && Object.entries(selectedStrategy.parameters).map(([key, spec]) => (
+                  <div key={key}>
+                    <label className={labelClass}>{key.replace(/_/g, " ")}</label>
+                    <input
+                      type={spec.type === "int" || spec.type === "float" ? "number" : "text"}
+                      className={inputClass}
+                      value={strategyParamValues[key] ?? spec.default}
+                      onChange={e => setStrategyParamValues({ ...strategyParamValues, [key]: e.target.value })}
+                      title={spec.description}
+                      placeholder={String(spec.default)}
+                    />
+                    {spec.description && (
+                      <p className="text-[#444] text-xs mt-0.5">{spec.description}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
