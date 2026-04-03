@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -35,6 +36,31 @@ class CompareRequest(BaseModel):
     starting_capital: float
     from_dt: datetime
     to_dt: datetime
+
+
+_MAX_OPTIMIZE_COMBINATIONS = 100
+
+
+class OptimizeRequest(BaseModel):
+    symbol: str
+    start_date: str
+    end_date: str
+    starting_capital: float
+    strategy: str
+    parameter_ranges: dict[str, list]
+
+
+class OptimizeResultItem(BaseModel):
+    parameters: dict
+    sharpe_ratio: float | None
+    total_pnl: float
+    win_rate: float
+    num_trades: int
+
+
+class OptimizeResponse(BaseModel):
+    combinations_tested: int
+    results: list[OptimizeResultItem]
 
 
 @router.post("/seed/{symbol}")
@@ -137,3 +163,73 @@ async def run_backtest_compare(req: CompareRequest, db: AsyncSession = Depends(g
 
     specs = [{"name": s.name, "params": s.params} for s in req.strategies]
     return run_comparison(bars, strategy_specs=specs, starting_capital=req.starting_capital)
+
+
+@router.post("/optimize", response_model=OptimizeResponse)
+async def optimize_strategy(req: OptimizeRequest, db: AsyncSession = Depends(get_db)):
+    if req.strategy not in STRATEGY_REGISTRY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown strategy: '{req.strategy}'. Available: {list(STRATEGY_REGISTRY.keys())}",
+        )
+
+    # Build the full cartesian product of parameter values
+    param_names = list(req.parameter_ranges.keys())
+    param_values = [req.parameter_ranges[k] for k in param_names]
+    all_combinations = list(itertools.product(*param_values))
+
+    if len(all_combinations) > _MAX_OPTIMIZE_COMBINATIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many parameter combinations: {len(all_combinations)}. "
+                f"Maximum allowed is {_MAX_OPTIMIZE_COMBINATIONS}. "
+                "Reduce the number of values in parameter_ranges."
+            ),
+        )
+
+    from_dt = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
+    to_dt = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+
+    result = await db.execute(
+        select(PriceHistory)
+        .where(
+            PriceHistory.symbol == req.symbol.upper(),
+            PriceHistory.timestamp >= from_dt,
+            PriceHistory.timestamp <= to_dt,
+        )
+        .order_by(PriceHistory.timestamp.asc())
+    )
+    bars = result.scalars().all()
+
+    strategy_cls = STRATEGY_REGISTRY[req.strategy]
+    results: list[OptimizeResultItem] = []
+
+    for combo in all_combinations:
+        params = dict(zip(param_names, combo))
+        try:
+            strategy = strategy_cls(**params)
+        except TypeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid parameters for strategy '{req.strategy}': {exc}",
+            )
+
+        runner = BacktestRunner(strategy=strategy, starting_capital=req.starting_capital)
+        trades = runner.run(bars)
+        summary = compute_period_summary(trades, req.starting_capital)
+
+        results.append(
+            OptimizeResultItem(
+                parameters=params,
+                sharpe_ratio=summary["sharpe_ratio"],
+                total_pnl=summary["total_pnl"],
+                win_rate=summary["win_rate"],
+                num_trades=summary["num_trades"],
+            )
+        )
+
+    # Sort by sharpe_ratio descending; treat None as -infinity
+    results.sort(key=lambda r: (r.sharpe_ratio is not None, r.sharpe_ratio or 0.0), reverse=True)
+
+    return OptimizeResponse(combinations_tested=len(all_combinations), results=results)
