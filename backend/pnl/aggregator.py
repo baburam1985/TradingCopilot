@@ -1,3 +1,26 @@
+def compute_equity_curve(trades: list[dict], starting_capital: float, session_start: str) -> list[dict]:
+    """Return cumulative portfolio value at each closed trade event.
+
+    Each point: {"timestamp": ISO string, "portfolio_value": float}.
+    The first point anchors the curve at session start with starting_capital.
+    """
+    closed = [
+        t for t in trades
+        if t.get("status") == "closed" and t.get("pnl") is not None and t.get("timestamp_close") is not None
+    ]
+    closed.sort(key=lambda t: t["timestamp_close"])
+
+    points = [{"timestamp": session_start, "portfolio_value": round(starting_capital, 4)}]
+    cumulative = starting_capital
+    for t in closed:
+        cumulative += float(t["pnl"])
+        points.append({
+            "timestamp": t["timestamp_close"],
+            "portfolio_value": round(cumulative, 4),
+        })
+    return points
+
+
 def compute_period_summary(trades: list[dict], starting_capital: float) -> dict:
     closed = [t for t in trades if t.get("status") == "closed" and t.get("pnl") is not None]
     total_pnl = sum(t["pnl"] for t in closed)

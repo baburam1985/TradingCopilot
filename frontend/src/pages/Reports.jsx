@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { getSessions, getTrades, getPnl } from "../api/client";
+import { getSessions, getTrades, getPnl, getEquityCurve } from "../api/client";
 import PnLChart from "../components/PnLChart";
+import EquityCurveChart from "../components/EquityCurveChart";
 import TradeLog from "../components/TradeLog";
 import ComparisonView from "../components/ComparisonView";
 import PageHeader from "../components/PageHeader";
@@ -15,6 +16,7 @@ export default function Reports() {
   const [selectedId, setSelectedId] = useState(null);
   const [trades, setTrades] = useState([]);
   const [pnl, setPnl] = useState(null);
+  const [equityCurve, setEquityCurve] = useState([]);
 
   useEffect(() => {
     if (backtestResult) return;
@@ -23,9 +25,10 @@ export default function Reports() {
 
   useEffect(() => {
     if (!selectedId) return;
-    Promise.all([getTrades(selectedId), getPnl(selectedId)]).then(([t, p]) => {
+    Promise.all([getTrades(selectedId), getPnl(selectedId), getEquityCurve(selectedId)]).then(([t, p, ec]) => {
       setTrades(t.data);
       setPnl(p.data.all_time);
+      setEquityCurve(ec.data);
     });
   }, [selectedId]);
 
@@ -42,6 +45,20 @@ export default function Reports() {
     : "—";
 
   if (backtestResult) {
+    const backtestStartingCapital = backtestResult.summary?.starting_capital ?? 1000;
+    const backtestEquityCurve = (() => {
+      const closed = backtestResult.trades
+        .filter(t => t.status === "closed" && t.pnl != null && t.timestamp_close)
+        .sort((a, b) => new Date(a.timestamp_close) - new Date(b.timestamp_close));
+      const points = [{ timestamp: closed[0]?.timestamp_open ?? new Date().toISOString(), portfolio_value: backtestStartingCapital }];
+      let cum = backtestStartingCapital;
+      for (const t of closed) {
+        cum += parseFloat(t.pnl);
+        points.push({ timestamp: t.timestamp_close, portfolio_value: Math.round(cum * 10000) / 10000 });
+      }
+      return points;
+    })();
+
     return (
       <div className="p-6">
         <PageHeader
@@ -54,6 +71,11 @@ export default function Reports() {
           <MetricCard label="Total Sessions" value={totalSessions} />
           <MetricCard label="Total P&L" value={totalPnl} valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined} />
           <MetricCard label="Avg Win Rate" value={avgWinRate} valueColor="green" />
+        </div>
+
+        <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+          <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Equity Curve</h2>
+          <EquityCurveChart points={backtestEquityCurve} startingCapital={backtestStartingCapital} />
         </div>
 
         <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
@@ -138,6 +160,10 @@ export default function Reports() {
 
       {pnl && trades.length > 0 && (
         <>
+          <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+            <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Equity Curve</h2>
+            <EquityCurveChart points={equityCurve} startingCapital={parseFloat(pnl.starting_capital)} />
+          </div>
           <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
             <PnLChart trades={trades} />
             <ComparisonView trades={trades} summary={pnl} />

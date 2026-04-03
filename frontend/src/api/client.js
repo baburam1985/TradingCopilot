@@ -11,6 +11,7 @@ export const stopSession = (id) => api.patch(`/sessions/${id}/stop`);
 export const getStrategies = () => api.get("/strategies");
 export const getTrades = (sessionId) => api.get(`/sessions/${sessionId}/trades`);
 export const getPnl = (sessionId) => api.get(`/sessions/${sessionId}/pnl`);
+export const getEquityCurve = (sessionId) => api.get(`/sessions/${sessionId}/equity-curve`);
 export const runBacktest = (data) => api.post("/backtest", data);
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
 
