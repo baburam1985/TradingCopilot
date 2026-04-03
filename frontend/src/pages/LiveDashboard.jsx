@@ -4,6 +4,8 @@ import { getTrades, getLatestPrice } from "../api/client";
 import { createSessionSocket } from "../api/client";
 import PriceChart from "../components/PriceChart";
 import TradeLog from "../components/TradeLog";
+import PageHeader from "../components/PageHeader";
+import MetricCard from "../components/MetricCard";
 
 export default function LiveDashboard() {
   const { sessionId } = useParams();
@@ -31,19 +33,47 @@ export default function LiveDashboard() {
     ? ((latestPrice - parseFloat(openTrade.price_at_signal)) * parseFloat(openTrade.quantity)).toFixed(2)
     : null;
 
+  const totalTrades = trades.length;
+  const closedTrades = trades.filter(t => t.status === "closed");
+  const winners = closedTrades.filter(t => parseFloat(t.pnl ?? 0) > 0);
+  const winRate = closedTrades.length > 0
+    ? `${((winners.length / closedTrades.length) * 100).toFixed(0)}%`
+    : "—";
+
   return (
-    <div style={{ padding: "1rem" }}>
-      <h2>Live Dashboard</h2>
-      {latestPrice && <p>Current Price: <strong>${latestPrice.toFixed(2)}</strong></p>}
-      {openTrade && (
-        <div style={{ padding: "0.5rem", background: "#f0f9ff", borderRadius: 4, marginBottom: "1rem" }}>
-          <strong>Open Position</strong> — Entry: ${parseFloat(openTrade.price_at_signal).toFixed(2)} |
-          Unrealized P&L: <span style={{ color: unrealizedPnl > 0 ? "green" : "red" }}>${unrealizedPnl}</span>
-        </div>
-      )}
-      <PriceChart bars={bars} trades={trades} />
-      <h3>Trade Log</h3>
-      <TradeLog trades={trades} />
+    <div className="p-6">
+      <PageHeader
+        breadcrumb="HOME › DASHBOARD"
+        title="Live Dashboard"
+        subtitle={sessionId ? `Session ${sessionId}` : "Monitoring active session"}
+      />
+
+      {/* Metrics row */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <MetricCard
+          label="Current Price"
+          value={latestPrice ? `$${latestPrice.toFixed(2)}` : "—"}
+          valueColor="green"
+        />
+        <MetricCard
+          label="Open P&L"
+          value={unrealizedPnl !== null ? `$${unrealizedPnl}` : "—"}
+          valueColor={unrealizedPnl !== null ? (unrealizedPnl > 0 ? "green" : "red") : undefined}
+        />
+        <MetricCard label="Total Trades" value={totalTrades > 0 ? totalTrades : "—"} />
+        <MetricCard label="Win Rate" value={winRate} valueColor={winRate !== "—" ? "green" : undefined} />
+      </div>
+
+      {/* Charts */}
+      <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4 mb-4">
+        <PriceChart bars={bars} trades={trades} />
+      </div>
+
+      {/* Trade Log */}
+      <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+        <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-4">Trade Log</h2>
+        <TradeLog trades={trades} />
+      </div>
     </div>
   );
 }
