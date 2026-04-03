@@ -7,10 +7,11 @@ import { useNotifications } from "../context/NotificationContext";
 const NAV_ITEMS = [
   { label: "New Session", to: "/" },
   { label: "Dashboard", to: "/dashboard" },
+  { label: "Schedules", to: "/schedules" },
+  { label: "Watchlist", to: "/watchlist" },
   { label: "Reports", to: "/reports" },
   { label: "Optimize", to: "/optimize" },
   { label: "Alerts", to: "/alerts" },
-  { label: "Watchlist", to: "/watchlist" },
 ];
 
 export default function AppShell({ children }) {
