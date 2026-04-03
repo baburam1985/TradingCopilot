@@ -31,11 +31,12 @@ export default function Reports() {
 
   // Compute metrics from sessions or backtest
   const totalSessions = backtestResult ? 1 : sessions.length;
-  const totalPnl = pnl?.total_pnl != null
-    ? `$${parseFloat(pnl.total_pnl).toFixed(2)}`
+  const rawPnl = pnl?.total_pnl != null
+    ? parseFloat(pnl.total_pnl)
     : backtestResult
-    ? `$${(backtestResult.trades.reduce((sum, t) => sum + parseFloat(t.pnl ?? 0), 0)).toFixed(2)}`
-    : "—";
+    ? backtestResult.trades.reduce((sum, t) => sum + parseFloat(t.pnl ?? 0), 0)
+    : null;
+  const totalPnl = rawPnl != null ? `$${rawPnl.toFixed(2)}` : "—";
   const avgWinRate = pnl?.win_rate != null
     ? `${(parseFloat(pnl.win_rate) * 100).toFixed(0)}%`
     : "—";
@@ -51,7 +52,7 @@ export default function Reports() {
 
         <div className="grid grid-cols-3 gap-4 mb-8">
           <MetricCard label="Total Sessions" value={totalSessions} />
-          <MetricCard label="Total P&L" value={totalPnl} valueColor={parseFloat(totalPnl) >= 0 ? "green" : "red"} />
+          <MetricCard label="Total P&L" value={totalPnl} valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined} />
           <MetricCard label="Avg Win Rate" value={avgWinRate} valueColor="green" />
         </div>
 
@@ -81,7 +82,7 @@ export default function Reports() {
         <MetricCard
           label="Total P&L"
           value={totalPnl}
-          valueColor={pnl?.total_pnl != null ? (parseFloat(pnl.total_pnl) >= 0 ? "green" : "red") : undefined}
+          valueColor={rawPnl != null ? (rawPnl >= 0 ? "green" : "red") : undefined}
         />
         <MetricCard label="Avg Win Rate" value={avgWinRate} valueColor={avgWinRate !== "—" ? "green" : undefined} />
       </div>
