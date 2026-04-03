@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getStrategies, createSession, runBacktest } from "../api/client";
+import { getStrategies, createSession, runBacktest, runBacktestCompare } from "../api/client";
 import PageHeader from "../components/PageHeader";
 import MetricCard from "../components/MetricCard";
 
@@ -35,6 +35,8 @@ export default function NewSession() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareStrategies, setCompareStrategies] = useState([]);
 
   useEffect(() => {
     getStrategies().then((r) => {
@@ -66,13 +68,38 @@ export default function NewSession() {
     );
   };
 
+  const addCompareStrategy = () => {
+    if (!selectedStrategy) return;
+    setCompareStrategies([
+      ...compareStrategies,
+      { name: form.strategy, params: buildStrategyParams() },
+    ]);
+  };
+
+  const removeCompareStrategy = (idx) => {
+    setCompareStrategies(compareStrategies.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     const strategy_params = buildStrategyParams();
     try {
-      if (form.mode === "backtest") {
+      if (form.mode === "backtest" && compareMode) {
+        const allSpecs = [
+          { name: form.strategy, params: strategy_params },
+          ...compareStrategies,
+        ];
+        const result = await runBacktestCompare({
+          symbol: form.symbol,
+          strategies: allSpecs,
+          starting_capital: +form.starting_capital,
+          from_dt: form.from_dt,
+          to_dt: form.to_dt,
+        });
+        navigate("/reports", { state: { compareResult: result.data } });
+      } else if (form.mode === "backtest") {
         const result = await runBacktest({
           symbol: form.symbol,
           strategy: form.strategy,
@@ -292,6 +319,48 @@ export default function NewSession() {
               </div>
             )}
 
+            {/* Strategy Comparison (backtest only) */}
+            {form.mode === "backtest" && (
+              <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[#00e676] text-xs uppercase tracking-widest">Compare Strategies</h2>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <div
+                      onClick={() => setCompareMode(!compareMode)}
+                      className={`w-9 h-5 rounded-full transition-colors ${compareMode ? "bg-[#00e676]" : "bg-[#333]"} relative`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${compareMode ? "left-4" : "left-0.5"}`} />
+                    </div>
+                    <span className="text-[#555] text-xs">{compareMode ? "On" : "Off"}</span>
+                  </label>
+                </div>
+                {compareMode && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[#555] text-xs mb-2">
+                      Current strategy is included automatically. Add more to compare.
+                    </p>
+                    {compareStrategies.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between bg-[#0a0a0a] rounded px-3 py-2">
+                        <span className="text-white text-xs">{s.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCompareStrategy(i)}
+                          className="text-[#555] hover:text-[#ff4444] text-xs transition-colors"
+                        >remove</button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addCompareStrategy}
+                      className="text-[#00e676] text-xs border border-[#1e1e1e] rounded px-3 py-1.5 hover:border-[#00e676] transition-colors mt-1"
+                    >
+                      + Add current strategy config
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-[#ff4444] text-sm">{error}</p>}
 
             <button
@@ -299,7 +368,13 @@ export default function NewSession() {
               disabled={loading}
               className="bg-[#00e676] text-black font-semibold text-sm py-2.5 rounded hover:bg-[#00c853] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Starting..." : "Start Session"}
+              {loading
+                ? "Running..."
+                : form.mode === "backtest" && compareMode
+                ? "Run Comparison"
+                : form.mode === "backtest"
+                ? "Run Backtest"
+                : "Start Session"}
             </button>
           </form>
         </div>

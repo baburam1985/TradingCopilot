@@ -13,6 +13,7 @@ export const getTrades = (sessionId) => api.get(`/sessions/${sessionId}/trades`)
 export const getPnl = (sessionId) => api.get(`/sessions/${sessionId}/pnl`);
 export const getEquityCurve = (sessionId) => api.get(`/sessions/${sessionId}/equity-curve`);
 export const runBacktest = (data) => api.post("/backtest", data);
+export const runBacktestCompare = (data) => api.post("/backtest/compare", data);
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
 
 export function createSessionSocket(sessionId, onMessage) {

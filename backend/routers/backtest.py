@@ -10,6 +10,7 @@ from models.price_history import PriceHistory
 from strategies.registry import STRATEGY_REGISTRY
 from backtester.runner import BacktestRunner
 from pnl.aggregator import compute_period_summary
+from backtester.compare import run_comparison
 
 router = APIRouter()
 
@@ -18,6 +19,19 @@ class BacktestRequest(BaseModel):
     symbol: str
     strategy: str
     strategy_params: dict
+    starting_capital: float
+    from_dt: datetime
+    to_dt: datetime
+
+
+class StrategySpec(BaseModel):
+    name: str
+    params: dict = {}
+
+
+class CompareRequest(BaseModel):
+    symbol: str
+    strategies: list[StrategySpec]
     starting_capital: float
     from_dt: datetime
     to_dt: datetime
@@ -99,3 +113,27 @@ async def run_backtest(req: BacktestRequest, db: AsyncSession = Depends(get_db))
 
     summary = compute_period_summary(trades, req.starting_capital)
     return {"trades": trades, "summary": summary}
+
+
+@router.post("/compare")
+async def run_backtest_compare(req: CompareRequest, db: AsyncSession = Depends(get_db)):
+    for spec in req.strategies:
+        if spec.name not in STRATEGY_REGISTRY:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown strategy: '{spec.name}'. Available: {list(STRATEGY_REGISTRY.keys())}",
+            )
+
+    result = await db.execute(
+        select(PriceHistory)
+        .where(
+            PriceHistory.symbol == req.symbol.upper(),
+            PriceHistory.timestamp >= req.from_dt,
+            PriceHistory.timestamp <= req.to_dt,
+        )
+        .order_by(PriceHistory.timestamp.asc())
+    )
+    bars = result.scalars().all()
+
+    specs = [{"name": s.name, "params": s.params} for s in req.strategies]
+    return run_comparison(bars, strategy_specs=specs, starting_capital=req.starting_capital)

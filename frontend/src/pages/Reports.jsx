@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { getSessions, getTrades, getPnl, getEquityCurve } from "../api/client";
 import PnLChart from "../components/PnLChart";
 import EquityCurveChart from "../components/EquityCurveChart";
+import StrategyComparisonChart from "../components/StrategyComparisonChart";
 import TradeLog from "../components/TradeLog";
 import ComparisonView from "../components/ComparisonView";
 import PageHeader from "../components/PageHeader";
@@ -11,6 +12,7 @@ import MetricCard from "../components/MetricCard";
 export default function Reports() {
   const location = useLocation();
   const backtestResult = location.state?.backtestResult;
+  const compareResult = location.state?.compareResult;
 
   const [sessions, setSessions] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -50,6 +52,21 @@ export default function Reports() {
   const maxDdDisplay = pnl?.max_drawdown_pct != null ? `${pnl.max_drawdown_pct.toFixed(2)}%` : "—";
   const calmarDisplay = pnl?.calmar_ratio != null ? fmt2(pnl.calmar_ratio) : "—";
   const pfDisplay = pnl?.profit_factor != null ? fmt2(pnl.profit_factor) : "—";
+
+  if (compareResult) {
+    return (
+      <div className="p-6">
+        <PageHeader
+          breadcrumb="HOME › REPORTS › COMPARE"
+          title="Strategy Comparison"
+          subtitle="Side-by-side performance across strategies"
+        />
+        <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+          <StrategyComparisonChart results={compareResult} />
+        </div>
+      </div>
+    );
+  }
 
   if (backtestResult) {
     const backtestStartingCapital = backtestResult.summary?.starting_capital ?? 1000;
