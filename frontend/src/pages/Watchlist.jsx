@@ -1,165 +1,256 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getSessions, getPnl, stopSession } from "../api/client";
+import { useState, useEffect, useRef } from "react";
+import {
+  getWatchlist,
+  createWatchlistItem,
+  deleteWatchlistItem,
+  createWatchlistSocket,
+} from "../api/client";
 import PageHeader from "../components/PageHeader";
+import { useNotifications } from "../context/NotificationContext";
 
-const POLL_INTERVAL_MS = 10_000;
+const SIGNAL_BADGE = {
+  buy:  "bg-[#00e676]/10 text-[#00e676] border border-[#00e676]/30",
+  sell: "bg-red-500/10 text-red-400 border border-red-500/30",
+  hold: "bg-[#1e1e1e] text-[#888] border border-[#333]",
+};
 
-function modeBadge(mode) {
-  const isPaper = mode === "paper" || mode === "alpaca_paper";
-  return (
-    <span
-      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-        isPaper ? "bg-[#1e3a2e] text-[#00e676]" : "bg-[#3a1e1e] text-[#ff4444]"
-      }`}
-    >
-      {isPaper ? "Paper" : "Live"}
-    </span>
-  );
-}
+function AddItemModal({ onClose, onAdd }) {
+  const [form, setForm] = useState({
+    symbol: "",
+    strategy: "rsi",
+    alert_threshold: "",
+    notify_email: false,
+    email_address: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-function statusBadge(status) {
-  const map = {
-    active: "text-[#00e676]",
-    paused: "text-[#f0a500]",
-    closed: "text-[#888]",
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        symbol: form.symbol.trim().toUpperCase(),
+        strategy: form.strategy,
+        strategy_params: {},
+        alert_threshold: form.alert_threshold ? parseFloat(form.alert_threshold) : null,
+        notify_email: form.notify_email,
+        email_address: form.notify_email ? form.email_address : null,
+      };
+      const resp = await createWatchlistItem(payload);
+      onAdd(resp.data);
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.detail ?? "Failed to add symbol");
+    } finally {
+      setLoading(false);
+    }
   };
-  return (
-    <span className={`text-xs font-semibold uppercase ${map[status] ?? "text-[#888]"}`}>
-      {status}
-    </span>
-  );
-}
-
-function SessionCard({ session, pnl, onStop }) {
-  const navigate = useNavigate();
-  const totalPnl = pnl?.total_pnl != null ? parseFloat(pnl.total_pnl) : null;
-  const winRate = pnl?.win_rate != null ? `${(parseFloat(pnl.win_rate) * 100).toFixed(0)}%` : "—";
-  const pnlPositive = totalPnl !== null && totalPnl > 0;
-  const pnlNegative = totalPnl !== null && totalPnl < 0;
 
   return (
-    <div
-      data-testid="session-card"
-      className="bg-[#141414] border border-[#1e1e1e] rounded p-4 flex flex-col gap-3"
-    >
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <span className="text-white font-bold text-xl tracking-wider">{session.symbol}</span>
-        <div className="flex items-center gap-2">
-          {modeBadge(session.mode)}
-          {statusBadge(session.status)}
-        </div>
-      </div>
-
-      {/* Strategy */}
-      <div className="text-[#888] text-xs">
-        Strategy: <span className="text-[#aaa]">{session.strategy}</span>
-      </div>
-
-      {/* Metrics row */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[#555] text-[10px] uppercase tracking-wider">P&amp;L</span>
-          <span
-            data-testid="pnl-value"
-            className={`text-sm font-semibold ${
-              pnlPositive ? "text-[#00e676]" : pnlNegative ? "text-[#ff4444]" : "text-[#888]"
-            }`}
-          >
-            {totalPnl !== null ? `$${totalPnl.toFixed(2)}` : "—"}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[#555] text-[10px] uppercase tracking-wider">Win Rate</span>
-          <span className="text-sm font-semibold text-white">{winRate}</span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={() => navigate(`/dashboard/${session.id}`)}
-          className="flex-1 text-xs font-semibold py-1.5 rounded bg-[#1e1e1e] text-[#00e676] hover:bg-[#252525] transition-colors border border-[#00e676]/30"
-        >
-          View
-        </button>
-        {session.status === "active" && (
-          <button
-            onClick={() => onStop(session.id)}
-            className="flex-1 text-xs font-semibold py-1.5 rounded bg-[#1e1e1e] text-[#ff4444] hover:bg-[#252525] transition-colors border border-[#ff4444]/30"
-          >
-            Stop
-          </button>
-        )}
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-[#141414] border border-[#1e1e1e] rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-[#00e676] text-sm uppercase tracking-widest mb-4">Add Symbol to Watchlist</h2>
+        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-[#888] text-xs uppercase tracking-wide block mb-1">Symbol</label>
+            <input
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00e676]"
+              value={form.symbol}
+              onChange={(e) => setForm({ ...form, symbol: e.target.value })}
+              placeholder="AAPL"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-[#888] text-xs uppercase tracking-wide block mb-1">Strategy</label>
+            <select
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00e676]"
+              value={form.strategy}
+              onChange={(e) => setForm({ ...form, strategy: e.target.value })}
+            >
+              <option value="rsi">RSI</option>
+              <option value="moving_average_crossover">Moving Average Crossover</option>
+              <option value="bollinger_bands">Bollinger Bands</option>
+              <option value="macd">MACD</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[#888] text-xs uppercase tracking-wide block mb-1">Alert Threshold (price, optional)</label>
+            <input
+              type="number"
+              step="0.01"
+              className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00e676]"
+              value={form.alert_threshold}
+              onChange={(e) => setForm({ ...form, alert_threshold: e.target.value })}
+              placeholder="e.g. 180.00"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="notify_email"
+              checked={form.notify_email}
+              onChange={(e) => setForm({ ...form, notify_email: e.target.checked })}
+            />
+            <label htmlFor="notify_email" className="text-[#888] text-xs uppercase tracking-wide">Email Alerts</label>
+          </div>
+          {form.notify_email && (
+            <div>
+              <label className="text-[#888] text-xs uppercase tracking-wide block mb-1">Email Address</label>
+              <input
+                type="email"
+                className="w-full bg-[#0a0a0a] border border-[#1e1e1e] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#00e676]"
+                value={form.email_address}
+                onChange={(e) => setForm({ ...form, email_address: e.target.value })}
+                required={form.notify_email}
+              />
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-[#00e676] text-black text-sm font-bold py-2 rounded hover:bg-[#00c853] disabled:opacity-50 transition-colors"
+            >
+              {loading ? "Adding..." : "Add to Watchlist"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-[#1e1e1e] text-[#888] text-sm py-2 rounded hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
 export default function Watchlist() {
-  const [sessions, setSessions] = useState([]);
-  const [pnlMap, setPnlMap] = useState({});
-  const [loading, setLoading] = useState(true);
-
-  function fetchSessions() {
-    getSessions()
-      .then((r) => setSessions(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }
-
-  function fetchPnl(sessionList) {
-    sessionList.forEach((s) => {
-      getPnl(s.id)
-        .then((r) => setPnlMap((prev) => ({ ...prev, [s.id]: r.data.all_time ?? null })))
-        .catch(() => setPnlMap((prev) => ({ ...prev, [s.id]: null })));
-    });
-  }
+  const [items, setItems] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const wsRef = useRef(null);
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
-    fetchSessions();
-    const interval = setInterval(fetchSessions, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    getWatchlist().then((r) => setItems(r.data));
+
+    wsRef.current = createWatchlistSocket((msg) => {
+      if (msg.type === "notification") {
+        addNotification(msg);
+        // Update signal badge for the relevant item
+        if (msg.watchlist_item_id) {
+          setItems((prev) =>
+            prev.map((item) =>
+              String(item.id) === msg.watchlist_item_id
+                ? {
+                    ...item,
+                    last_signal: msg.message.includes("BUY")
+                      ? "buy"
+                      : msg.message.includes("SELL")
+                      ? "sell"
+                      : item.last_signal,
+                  }
+                : item
+            )
+          );
+        }
+      }
+    });
+
+    return () => wsRef.current?.close();
   }, []);
 
-  useEffect(() => {
-    if (sessions.length > 0) fetchPnl(sessions);
-  }, [sessions]);
+  const handleAdd = (newItem) => {
+    setItems((prev) => [newItem, ...prev]);
+  };
 
-  async function handleStop(sessionId) {
-    await stopSession(sessionId);
-    fetchSessions();
-  }
+  const handleDelete = async (id) => {
+    if (!window.confirm("Remove this symbol from your watchlist?")) return;
+    await deleteWatchlistItem(id);
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  };
 
   return (
     <div className="p-6">
       <PageHeader
         breadcrumb="HOME › WATCHLIST"
-        title="Session Watchlist"
-        subtitle="All active trading sessions — refreshes every 10s"
+        title="Watchlist"
+        subtitle="Monitor signals across multiple symbols without committing capital"
       />
 
-      {loading && (
-        <div className="text-[#888] text-sm mt-8 text-center">Loading sessions…</div>
-      )}
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-[#888] text-xs uppercase tracking-wide">{items.length} symbols monitored</span>
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-[#00e676] text-black text-xs font-bold px-4 py-2 rounded hover:bg-[#00c853] transition-colors uppercase tracking-wide"
+        >
+          + Add Symbol
+        </button>
+      </div>
 
-      {!loading && sessions.length === 0 && (
-        <div className="text-[#888] text-sm mt-8 text-center">
-          No sessions found. Start a new session to see it here.
+      {items.length === 0 ? (
+        <div className="bg-[#141414] border border-[#1e1e1e] rounded p-8 text-center text-[#555] text-sm">
+          No symbols on your watchlist. Add one to start monitoring signals.
+        </div>
+      ) : (
+        <div className="bg-[#141414] border border-[#1e1e1e] rounded overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#1e1e1e]">
+                {["Symbol", "Strategy", "Signal", "Last Price", "Alert Threshold", "Added", ""].map((h) => (
+                  <th key={h} className="text-left text-[#555] text-xs uppercase tracking-widest px-4 py-3 font-normal">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-b border-[#1a1a1a] hover:bg-[#111] transition-colors">
+                  <td className="px-4 py-3 font-bold text-white">{item.symbol}</td>
+                  <td className="px-4 py-3 text-[#888]">{item.strategy}</td>
+                  <td className="px-4 py-3">
+                    {item.last_signal ? (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase ${SIGNAL_BADGE[item.last_signal] ?? SIGNAL_BADGE.hold}`}>
+                        {item.last_signal}
+                      </span>
+                    ) : (
+                      <span className="text-[#555] text-xs">Pending</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[#ccc]">
+                    {item.last_price != null ? `$${parseFloat(item.last_price).toFixed(2)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-[#888]">
+                    {item.alert_threshold != null ? `$${parseFloat(item.alert_threshold).toFixed(2)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-[#555] text-xs">
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="text-[#555] hover:text-red-400 text-xs transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-6">
-        {sessions.map((s) => (
-          <SessionCard
-            key={s.id}
-            session={s}
-            pnl={pnlMap[s.id]}
-            onStop={handleStop}
-          />
-        ))}
-      </div>
+      {showModal && (
+        <AddItemModal onClose={() => setShowModal(false)} onAdd={handleAdd} />
+      )}
     </div>
   );
 }
