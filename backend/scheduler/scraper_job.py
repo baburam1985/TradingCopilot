@@ -6,6 +6,9 @@ from scrapers.alpha_vantage import fetch_alpha_vantage
 from scrapers.finnhub import fetch_finnhub
 from scrapers.aggregator import aggregate
 from scheduler.market_hours import is_market_open
+from database import AsyncSessionLocal
+from strategies.registry import STRATEGY_REGISTRY
+from notifications.broadcaster import notification_broadcaster, build_notification_payload
 
 scheduler = AsyncIOScheduler()
 _active_symbols: set[str] = set()
@@ -16,13 +19,21 @@ def register_symbol(symbol: str):
 def unregister_symbol(symbol: str):
     _active_symbols.discard(symbol.upper())
 
-# Aliases used by the watchlist router (Task 5 will expand these to also
-# schedule per-symbol evaluation jobs)
-def register_watchlist_symbol(symbol: str):
-    _active_symbols.add(symbol.upper())
+_watchlist_symbols: set[str] = set()
 
-def unregister_watchlist_symbol(symbol: str):
-    _active_symbols.discard(symbol.upper())
+
+def register_watchlist_symbol(symbol: str) -> None:
+    sym = symbol.upper()
+    _watchlist_symbols.add(sym)
+    _active_symbols.add(sym)  # ensure price is scraped
+
+
+def unregister_watchlist_symbol(symbol: str) -> None:
+    sym = symbol.upper()
+    _watchlist_symbols.discard(sym)
+    # Do NOT remove from _active_symbols — sessions manage that set themselves.
+    # If no session uses this symbol, it stays in _active_symbols but
+    # _trigger_watchlist_signals will find no items and be a no-op.
 
 async def _scrape_all():
     if not is_market_open():
@@ -63,6 +74,9 @@ async def _scrape_symbol(symbol: str):
         await db.commit()
 
     await _trigger_strategy(symbol, bar.close)
+
+    if symbol in _watchlist_symbols:
+        await _trigger_watchlist_signals(symbol, bar.close)
 
 _ALPACA_MODES = ("alpaca_paper", "alpaca_live")
 
@@ -260,6 +274,101 @@ async def _trigger_strategy(symbol: str, current_price: float):
                 message=f"{symbol}: {signal.action} at ${current_price:.2f} — {signal.reason}",
                 db=db,
             )
+
+async def _trigger_watchlist_signals(symbol: str, current_price: float):
+    import logging
+    from models.watchlist_item import WatchlistItem
+    from models.price_history import PriceHistory
+    from sqlalchemy import select
+    from notifications.email import send_trade_email
+
+    logger = logging.getLogger(__name__)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(WatchlistItem).where(WatchlistItem.symbol == symbol)
+        )
+        items = result.scalars().all()
+
+    for item in items:
+        strategy_cls = STRATEGY_REGISTRY.get(item.strategy)
+        if strategy_cls is None:
+            logger.warning("Watchlist item %s: unknown strategy '%s'", item.id, item.strategy)
+            continue
+
+        strategy = strategy_cls(**(item.strategy_params or {}))
+
+        async with AsyncSessionLocal() as db:
+            ph_result = await db.execute(
+                select(PriceHistory)
+                .where(PriceHistory.symbol == symbol)
+                .order_by(PriceHistory.timestamp.desc())
+                .limit(500)
+            )
+            bars = ph_result.scalars().all()
+
+        closes = [float(b.close) for b in reversed(bars)]
+        signal = strategy.analyze(closes)
+
+        # Detect price-threshold crossing
+        threshold_crossed = False
+        if item.alert_threshold is not None and item.last_price is not None:
+            prev = float(item.last_price)
+            threshold = float(item.alert_threshold)
+            if (prev < threshold <= current_price) or (prev > threshold >= current_price):
+                threshold_crossed = True
+
+        # Persist updated state
+        async with AsyncSessionLocal() as db:
+            db_item = await db.get(WatchlistItem, item.id)
+            if db_item:
+                db_item.last_signal = signal.action
+                db_item.last_price = current_price
+                db_item.last_evaluated_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        # Broadcast signal alert on buy or sell
+        if signal.action in ("buy", "sell"):
+            level = "info"
+            title = f"Watchlist Signal: {symbol}"
+            message = (
+                f"{item.strategy} generated a {signal.action.upper()} signal "
+                f"at ${current_price:.2f} — {signal.reason}"
+            )
+            payload = build_notification_payload(level=level, title=title, message=message)
+            payload["watchlist_item_id"] = str(item.id)
+            await notification_broadcaster.broadcast_watchlist(payload)
+            if item.notify_email and item.email_address:
+                try:
+                    send_trade_email(
+                        item.email_address,
+                        f"TradingCopilot: {title}",
+                        message,
+                    )
+                except Exception as exc:
+                    logger.warning("Watchlist email delivery failed: %s", exc)
+
+        # Broadcast price-threshold alert
+        if threshold_crossed:
+            level = "warning"
+            title = f"Watchlist Alert: {symbol}"
+            message = (
+                f"{symbol} crossed alert threshold ${item.alert_threshold:.2f} "
+                f"(current: ${current_price:.2f})"
+            )
+            payload = build_notification_payload(level=level, title=title, message=message)
+            payload["watchlist_item_id"] = str(item.id)
+            await notification_broadcaster.broadcast_watchlist(payload)
+            if item.notify_email and item.email_address and signal.action not in ("buy", "sell"):
+                try:
+                    send_trade_email(
+                        item.email_address,
+                        f"TradingCopilot: {title}",
+                        message,
+                    )
+                except Exception as exc:
+                    logger.warning("Watchlist threshold email delivery failed: %s", exc)
+
 
 def start_scheduler():
     scheduler.add_job(_scrape_all, "interval", minutes=1, id="scrape_all")

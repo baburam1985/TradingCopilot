@@ -181,3 +181,146 @@ async def test_broadcaster_broadcast_watchlist_removes_dead_connections():
     await b.broadcast_watchlist({"type": "notification"})
     assert ws_dead not in b._watchlist_connections
     assert ws_ok in b._watchlist_connections
+
+
+# ---------------------------------------------------------------------------
+# Scheduler watchlist tests
+# ---------------------------------------------------------------------------
+
+
+def test_register_and_unregister_watchlist_symbol():
+    import importlib
+    import scheduler.scraper_job as job
+    importlib.reload(job)  # reset module-level sets
+
+    job.register_watchlist_symbol("AAPL")
+    assert "AAPL" in job._watchlist_symbols
+
+    job.unregister_watchlist_symbol("AAPL")
+    assert "AAPL" not in job._watchlist_symbols
+
+
+def test_register_watchlist_symbol_uppercased():
+    import importlib
+    import scheduler.scraper_job as job
+    importlib.reload(job)
+
+    job.register_watchlist_symbol("tsla")
+    assert "TSLA" in job._watchlist_symbols
+    job.unregister_watchlist_symbol("TSLA")
+
+
+def test_unregister_watchlist_symbol_does_not_remove_active_session_symbol():
+    """Removing a watchlist symbol should not stop scraping if a session also watches it."""
+    import importlib
+    import scheduler.scraper_job as job
+    importlib.reload(job)
+
+    job.register_symbol("AAPL")          # session registration
+    job.register_watchlist_symbol("AAPL") # watchlist registration
+    job.unregister_watchlist_symbol("AAPL")
+
+    # Symbol must still be scraped because an active session uses it
+    assert "AAPL" in job._active_symbols
+
+
+@pytest.mark.asyncio
+async def test_trigger_watchlist_signals_broadcasts_on_buy():
+    import importlib
+    import scheduler.scraper_job as job
+
+    mock_signal = MagicMock()
+    mock_signal.action = "buy"
+    mock_signal.reason = "RSI oversold"
+
+    mock_strategy = MagicMock()
+    mock_strategy.return_value.analyze.return_value = mock_signal
+
+    mock_item = MagicMock()
+    mock_item.id = uuid.uuid4()
+    mock_item.symbol = "AAPL"
+    mock_item.strategy = "rsi"
+    mock_item.strategy_params = {}
+    mock_item.alert_threshold = None
+    mock_item.last_price = None
+    mock_item.notify_email = False
+    mock_item.email_address = None
+
+    mock_bar = MagicMock()
+    mock_bar.close = 182.0
+
+    with patch("scheduler.scraper_job.AsyncSessionLocal") as mock_session_cls, \
+         patch("scheduler.scraper_job.STRATEGY_REGISTRY", {"rsi": mock_strategy}), \
+         patch("scheduler.scraper_job.notification_broadcaster") as mock_broadcaster:
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_ctx
+
+        # First call returns watchlist items; second returns price history bars
+        mock_result_items = MagicMock()
+        mock_result_items.scalars.return_value.all.return_value = [mock_item]
+        mock_result_bars = MagicMock()
+        mock_result_bars.scalars.return_value.all.return_value = [mock_bar]
+        mock_ctx.execute = AsyncMock(side_effect=[mock_result_items, mock_result_bars])
+        mock_ctx.get = AsyncMock(return_value=mock_item)
+        mock_ctx.commit = AsyncMock()
+
+        mock_broadcaster.broadcast_watchlist = AsyncMock()
+
+        await job._trigger_watchlist_signals("AAPL", 182.0)
+
+    mock_broadcaster.broadcast_watchlist.assert_called_once()
+    call_payload = mock_broadcaster.broadcast_watchlist.call_args[0][0]
+    assert call_payload["level"] == "info"
+    assert "BUY" in call_payload["message"]
+    assert "AAPL" in call_payload["title"]
+
+
+@pytest.mark.asyncio
+async def test_trigger_watchlist_signals_no_broadcast_on_hold():
+    import scheduler.scraper_job as job
+
+    mock_signal = MagicMock()
+    mock_signal.action = "hold"
+    mock_signal.reason = "neutral"
+
+    mock_strategy = MagicMock()
+    mock_strategy.return_value.analyze.return_value = mock_signal
+
+    mock_item = MagicMock()
+    mock_item.id = uuid.uuid4()
+    mock_item.symbol = "MSFT"
+    mock_item.strategy = "rsi"
+    mock_item.strategy_params = {}
+    mock_item.alert_threshold = None
+    mock_item.last_price = None
+    mock_item.notify_email = False
+    mock_item.email_address = None
+
+    mock_bar = MagicMock()
+    mock_bar.close = 300.0
+
+    with patch("scheduler.scraper_job.AsyncSessionLocal") as mock_session_cls, \
+         patch("scheduler.scraper_job.STRATEGY_REGISTRY", {"rsi": mock_strategy}), \
+         patch("scheduler.scraper_job.notification_broadcaster") as mock_broadcaster:
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_ctx
+
+        mock_result_items = MagicMock()
+        mock_result_items.scalars.return_value.all.return_value = [mock_item]
+        mock_result_bars = MagicMock()
+        mock_result_bars.scalars.return_value.all.return_value = [mock_bar]
+        mock_ctx.execute = AsyncMock(side_effect=[mock_result_items, mock_result_bars])
+        mock_ctx.get = AsyncMock(return_value=mock_item)
+        mock_ctx.commit = AsyncMock()
+
+        mock_broadcaster.broadcast_watchlist = AsyncMock()
+
+        await job._trigger_watchlist_signals("MSFT", 300.0)
+
+    mock_broadcaster.broadcast_watchlist.assert_not_called()
