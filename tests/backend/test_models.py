@@ -21,3 +21,4 @@ def test_models_importable():
         assert TradingSession.__tablename__ == "sessions"
         assert PaperTrade.__tablename__ == "paper_trades"
         assert AggregatedPnl.__tablename__ == "aggregated_pnl"
+
