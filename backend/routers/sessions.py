@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,6 +17,11 @@ class CreateSessionRequest(BaseModel):
     strategy_params: dict
     starting_capital: float
     mode: str  # "paper" or "live"
+    # Risk management (all optional)
+    stop_loss_pct: Optional[float] = None
+    take_profit_pct: Optional[float] = None
+    max_position_pct: Optional[float] = None
+    daily_max_loss_pct: Optional[float] = None
 
 @router.post("")
 async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(get_db)):
@@ -27,6 +33,10 @@ async def create_session(req: CreateSessionRequest, db: AsyncSession = Depends(g
         mode=req.mode,
         status="active",
         created_at=datetime.now(timezone.utc),
+        stop_loss_pct=req.stop_loss_pct,
+        take_profit_pct=req.take_profit_pct,
+        max_position_pct=req.max_position_pct,
+        daily_max_loss_pct=req.daily_max_loss_pct,
     )
     db.add(session)
     await db.commit()

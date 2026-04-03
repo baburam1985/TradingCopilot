@@ -1,10 +1,9 @@
 {
+  "permissions": {
+    "allow": ["Bash(*)", "Write(*)", "Edit(*)", "MultiEdit(*)"],
+    "deny": ["Bash(rm -rf *)"]
+  },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
-  },
-  "permissions": {
-    "allow": [
-      "Bash(bash:*)"
-    ]
   }
 }

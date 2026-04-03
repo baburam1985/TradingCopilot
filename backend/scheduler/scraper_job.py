@@ -60,10 +60,17 @@ async def _trigger_strategy(symbol: str, current_price: float):
     import logging
     from executor.paper import PaperExecutor
     from strategies.registry import STRATEGY_REGISTRY
+    from risk.engine import (
+        should_stop_loss,
+        should_take_profit,
+        exceeds_max_position,
+        daily_loss_limit_breached,
+    )
     from database import AsyncSessionLocal
     from models.trading_session import TradingSession
+    from models.paper_trade import PaperTrade
     from models.price_history import PriceHistory
-    from sqlalchemy import select
+    from sqlalchemy import select, func
 
     logger = logging.getLogger(__name__)
 
@@ -78,6 +85,64 @@ async def _trigger_strategy(symbol: str, current_price: float):
         sessions = result.scalars().all()
 
     for session in sessions:
+        executor = PaperExecutor()
+
+        # --- Risk: close any open trades that hit stop-loss or take-profit ---
+        async with AsyncSessionLocal() as db:
+            open_result = await db.execute(
+                select(PaperTrade).where(
+                    PaperTrade.session_id == session.id,
+                    PaperTrade.status == "open",
+                )
+            )
+            open_trades = open_result.scalars().all()
+            for trade in open_trades:
+                entry = float(trade.price_at_signal)
+                hit_sl = should_stop_loss(entry, current_price, trade.action, session.stop_loss_pct)
+                hit_tp = should_take_profit(entry, current_price, trade.action, session.take_profit_pct)
+                if hit_sl or hit_tp:
+                    reason = "stop-loss" if hit_sl else "take-profit"
+                    await executor.close_trade(trade, current_price, db)
+                    logger.info(
+                        "Session %s: closed trade %s via %s at %.4f",
+                        session.id,
+                        trade.id,
+                        reason,
+                        current_price,
+                    )
+
+        # --- Risk: daily max loss circuit breaker ---
+        if session.daily_max_loss_pct is not None:
+            async with AsyncSessionLocal() as db:
+                today_start = datetime.now(timezone.utc).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                daily_result = await db.execute(
+                    select(func.coalesce(func.sum(PaperTrade.pnl), 0)).where(
+                        PaperTrade.session_id == session.id,
+                        PaperTrade.status == "closed",
+                        PaperTrade.timestamp_close >= today_start,
+                    )
+                )
+                daily_pnl = float(daily_result.scalar())
+
+            if daily_loss_limit_breached(daily_pnl, float(session.starting_capital), session.daily_max_loss_pct):
+                async with AsyncSessionLocal() as db:
+                    sess = await db.get(TradingSession, session.id)
+                    if sess and sess.status == "active":
+                        sess.status = "closed"
+                        sess.closed_at = datetime.now(timezone.utc)
+                        await db.commit()
+                unregister_symbol(symbol)
+                logger.warning(
+                    "Session %s: daily max loss circuit breaker triggered (%.2f P&L, limit %.1f%%)",
+                    session.id,
+                    daily_pnl,
+                    session.daily_max_loss_pct,
+                )
+                continue
+
+        # --- Strategy signal ---
         strategy_cls = STRATEGY_REGISTRY.get(session.strategy)
         if strategy_cls is None:
             logger.warning(
@@ -100,10 +165,40 @@ async def _trigger_strategy(symbol: str, current_price: float):
 
         closes = [float(b.close) for b in reversed(bars)]
         signal = strategy.analyze(closes)
-        if signal.action != "hold":
-            executor = PaperExecutor()
-            async with AsyncSessionLocal() as db:
-                await executor.execute(session, signal, current_price, db)
+        if signal.action == "hold":
+            continue
+
+        # --- Risk: max position size check ---
+        capital = float(session.starting_capital)
+        quantity = capital / current_price
+        if exceeds_max_position(quantity, current_price, capital, session.max_position_pct):
+            logger.info(
+                "Session %s: skipping %s — exceeds max position size (%.1f%%)",
+                session.id,
+                signal.action,
+                session.max_position_pct,
+            )
+            continue
+
+        opposing = "buy" if signal.action == "sell" else "sell"
+        async with AsyncSessionLocal() as db:
+            open_result = await db.execute(
+                select(PaperTrade).where(
+                    PaperTrade.session_id == session.id,
+                    PaperTrade.status == "open",
+                    PaperTrade.action == opposing,
+                )
+            )
+            for open_trade in open_result.scalars().all():
+                await executor.close_trade(open_trade, current_price, db)
+            await executor.execute(session, signal, current_price, db)
+        logger.info(
+            "Session %s: %s at %.4f (%s)",
+            session.id,
+            signal.action,
+            current_price,
+            signal.reason,
+        )
 
 def start_scheduler():
     scheduler.add_job(_scrape_all, "interval", minutes=1, id="scrape_all")

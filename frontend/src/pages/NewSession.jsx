@@ -28,6 +28,10 @@ export default function NewSession() {
     mode: "paper",
     from_dt: "",
     to_dt: "",
+    stop_loss_pct: "",
+    take_profit_pct: "",
+    max_position_pct: "",
+    daily_max_loss_pct: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -85,6 +89,10 @@ export default function NewSession() {
           strategy_params,
           starting_capital: +form.starting_capital,
           mode: form.mode,
+          stop_loss_pct: form.stop_loss_pct !== "" ? +form.stop_loss_pct : null,
+          take_profit_pct: form.take_profit_pct !== "" ? +form.take_profit_pct : null,
+          max_position_pct: form.max_position_pct !== "" ? +form.max_position_pct : null,
+          daily_max_loss_pct: form.daily_max_loss_pct !== "" ? +form.daily_max_loss_pct : null,
         });
         navigate(`/dashboard/${session.data.id}`);
       }
@@ -191,6 +199,67 @@ export default function NewSession() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Risk Management */}
+            <div className="bg-[#141414] border border-[#1e1e1e] rounded p-4">
+              <h2 className="text-[#00e676] text-xs uppercase tracking-widest mb-1">Risk Management</h2>
+              <p className="text-[#444] text-xs mb-4">All fields optional. Leave blank to disable that guardrail.</p>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className={labelClass}>Stop-Loss (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className={inputClass}
+                    value={form.stop_loss_pct}
+                    onChange={e => setForm({ ...form, stop_loss_pct: e.target.value })}
+                    placeholder="e.g. 5"
+                  />
+                  <p className="text-[#444] text-xs mt-0.5">Exit if unrealised loss reaches this %</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Take-Profit (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className={inputClass}
+                    value={form.take_profit_pct}
+                    onChange={e => setForm({ ...form, take_profit_pct: e.target.value })}
+                    placeholder="e.g. 15"
+                  />
+                  <p className="text-[#444] text-xs mt-0.5">Exit if unrealised gain reaches this %</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Max Position Size (% of capital)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className={inputClass}
+                    value={form.max_position_pct}
+                    onChange={e => setForm({ ...form, max_position_pct: e.target.value })}
+                    placeholder="e.g. 50"
+                  />
+                  <p className="text-[#444] text-xs mt-0.5">Skip trades that would exceed this % of capital</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Daily Max Loss (% of capital)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className={inputClass}
+                    value={form.daily_max_loss_pct}
+                    onChange={e => setForm({ ...form, daily_max_loss_pct: e.target.value })}
+                    placeholder="e.g. 3"
+                  />
+                  <p className="text-[#444] text-xs mt-0.5">Close session if daily P&L loss exceeds this %</p>
+                </div>
               </div>
             </div>
 

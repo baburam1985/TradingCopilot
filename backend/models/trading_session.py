@@ -19,3 +19,9 @@ class TradingSession(Base):
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     closed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Risk management parameters (all optional; None = feature disabled)
+    stop_loss_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
+    take_profit_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
+    max_position_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
+    daily_max_loss_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
