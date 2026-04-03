@@ -16,6 +16,7 @@ export const runBacktest = (data) => api.post("/backtest", data);
 export const runBacktestCompare = (data) => api.post("/backtest/compare", data);
 export const runOptimize = (data) => api.post("/backtest/optimize", data);
 export const getLatestPrice = (symbol) => api.get(`/symbols/${symbol}/latest`);
+export const getSparkline = (symbol) => api.get(`/symbols/${symbol}/sparkline`);
 
 export const getAlerts = (sessionId, limit = 20) =>
   api.get("/alerts", { params: { session_id: sessionId, limit } });

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import NewSession from "./pages/NewSession";
@@ -7,9 +8,14 @@ import Optimize from "./pages/Optimize";
 import AlertPreferences from "./pages/AlertPreferences";
 import Watchlist from "./pages/Watchlist";
 import ScheduledSessions from "./pages/ScheduledSessions";
+import Onboarding from "./pages/Onboarding";
 import { NotificationProvider } from "./context/NotificationContext";
 
 export default function App() {
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => localStorage.getItem("onboarded") !== "true"
+  );
+
   return (
     <NotificationProvider>
     <BrowserRouter>
@@ -23,6 +29,7 @@ export default function App() {
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/schedules" element={<ScheduledSessions />} />
         </Routes>
+        {showOnboarding && <Onboarding onDismiss={() => setShowOnboarding(false)} />}
       </AppShell>
     </BrowserRouter>
     </NotificationProvider>

@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest.mock
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import AsyncClient, ASGITransport
 
@@ -31,17 +32,30 @@ _stub_scraper_modules()
 
 # Now it is safe to import main
 from main import app  # noqa: E402  (must come after stubs)
+from database import get_db
 
 
 @pytest.mark.asyncio
 async def test_list_strategies_returns_moving_average():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/strategies")
-    assert resp.status_code == 200
-    data = resp.json()
-    names = [s["name"] for s in data]
-    assert "moving_average_crossover" in names
-    assert "rsi" in names
+    result_mock = MagicMock()
+    result_mock.__iter__ = MagicMock(return_value=iter([]))
+
+    async def mock_get_db():
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=result_mock)
+        yield db
+
+    app.dependency_overrides[get_db] = mock_get_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/strategies")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [s["name"] for s in data]
+        assert "moving_average_crossover" in names
+        assert "rsi" in names
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio

@@ -37,6 +37,20 @@ async def get_latest(symbol: str, db: AsyncSession = Depends(get_db)):
     return result.scalar_one_or_none()
 
 
+@router.get("/{symbol}/sparkline")
+async def get_sparkline(symbol: str, db: AsyncSession = Depends(get_db)):
+    """Return the last 7 close prices for a symbol (oldest first)."""
+    result = await db.execute(
+        select(PriceHistory.timestamp, PriceHistory.close)
+        .where(PriceHistory.symbol == symbol.upper())
+        .order_by(PriceHistory.timestamp.desc())
+        .limit(7)
+    )
+    rows = result.all()
+    # Reverse to chronological order
+    return [{"timestamp": r.timestamp.isoformat(), "close": float(r.close)} for r in reversed(rows)]
+
+
 @router.post("/{symbol}/scrape")
 async def scrape_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     result = await _yahoo_scraper.fetch_yahoo(symbol.upper())
